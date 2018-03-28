@@ -1,4 +1,4 @@
-\m4_TLV_version 1c: tl-x.org
+\m4_TLV_version 1d: tl-x.org
 \SV
 /*
 Copyright (c) 2018, Steve Hoover
@@ -40,25 +40,26 @@ parameter RING_STOPS_WIDTH = M4_RING_STOPS_WIDTH;  //$clog2(RING_STOPS); // roun
 m4_define(M4_PACKET_SIZE, 16)
 parameter PACKET_SIZE = M4_PACKET_SIZE;
 
+
 \TLV
 
    // testbench
-   >tb
+   /tb
       |count
          @0
-            %next$CycCount[15:0] = >top|default%+1$reset ? 16'b0 :
-                                                           $CycCount + 1;
+            $CycCount[15:0] <= /top|default>>1$reset ? 16'b0 :
+                                                       $CycCount + 1;
             \SV_plus
                always_ff @(posedge clk) begin
                   \$display("Cycle: %0d", $CycCount);
                end
-      >ring_stop[RING_STOPS-1:0]
+      /ring_stop[RING_STOPS-1:0]
          // STIMULUS
          |send
             @0
-               $valid_in = >tb|count%+0$CycCount == 3;
+               $valid_in = /tb|count<>0$CycCount == 3;
                ?$valid_in
-                  >gen_trans
+                  /gen_trans
                      $sender[RING_STOPS_WIDTH-1:0] = ring_stop;
                      //m4_rand($size, M4_PACKET_SIZE-1, 0, ring_stop) // unused
                      m4_rand($dest_tmp, M4_RING_STOPS_WIDTH-1, 0, ring_stop)
@@ -67,11 +68,11 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                      /* verilator lint_on WIDTH */
                      //$dest[RING_STOPS_WIDTH-1:0] = ring_stop;
                      //$packet_valid = ring_stop == 0 ? 1'b1 : 1'b0; // valid for only first ring_stop - unused
-               $trans_valid = $valid_in || >ring_stop|receive%+0$request;
+               $trans_valid = $valid_in || /ring_stop|receive<>0$request;
                ?$trans_valid
-                  >trans_out
-                     $ANY = >ring_stop|receive%+0$request ? >ring_stop|receive>trans%+0$ANY :
-                                                           |send>gen_trans%+0$ANY;
+                  /trans_out
+                     $ANY = /ring_stop|receive<>0$request ? /ring_stop|receive/trans<>0$ANY :
+                                                            |send/gen_trans$ANY;
                      
                      \SV_plus
                         always_ff @(posedge clk) begin
@@ -81,68 +82,68 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                      
          |receive
             @0
-               $reset = >top|default%+1$reset;
-               $trans_valid = >top>ring_stop>pipe2|fifo2_out%+1$trans_valid;
-               $request = $trans_valid && >trans%+0$sender != ring_stop;
-               $received = $trans_valid && >trans%+0$sender == ring_stop;
-               %next$NumPackets[PACKET_SIZE-1:0] = $reset                      ? '0 :
-                                                   >ring_stop|send%+0$valid_in ? $NumPackets + 1 :
-                                                   $request                    ? $NumPackets :
-                                                   $received                   ? $NumPackets - 1 :
-                                                                                 $NumPackets;
+               $reset = /top|default>>1$reset;
+               $trans_valid = /top/ring_stop/pipe2|fifo2_out>>1$trans_valid;
+               $request = $trans_valid && /trans$sender != ring_stop;
+               $received = $trans_valid && /trans$sender == ring_stop;
+               $NumPackets[PACKET_SIZE-1:0] <= $reset                      ? '0 :
+                                               /ring_stop|send<>0$valid_in ? $NumPackets + 1 :
+                                               $request                    ? $NumPackets :
+                                               $received                   ? $NumPackets - 1 :
+                                                                             $NumPackets;
                ?$trans_valid
-                  >trans
-                     $ANY = >top>ring_stop>pipe2|fifo2_out>trans%+1$ANY;
-                     $dest[RING_STOPS_WIDTH-1:0] = |receive%+0$request ? $sender : $dest;
+                  /trans
+                     $ANY = /top/ring_stop/pipe2|fifo2_out/trans>>1$ANY;
+                     $dest[RING_STOPS_WIDTH-1:0] = |receive$request ? $sender : $dest;
       |pass
          @0
-            $reset = >top|default%+1$reset;
-            $packets[RING_STOPS*PACKET_SIZE-1:0] = >tb>ring_stop[*]|receive%+0$NumPackets;
-            *passed = !$reset && ($packets == '0) && (>tb|count%+0$CycCount > 3);
+            $reset = /top|default>>1$reset;
+            $packets[RING_STOPS*PACKET_SIZE-1:0] = /tb/ring_stop[*]|receive<>0$NumPackets;
+            *passed = !$reset && ($packets == '0) && (/tb|count<>0$CycCount > 3);
    
    // Reset as a pipesignal.
    |default
       @0
-!        $reset = *reset;
+         $reset = *reset;
 
    // Ring
-   >ring_stop[RING_STOPS-1:0]
+   /ring_stop[RING_STOPS-1:0]
       |ring_in
          @0
-            $reset = >top|default%+1$reset;
+            $reset = /top|default>>1$reset;
             // transaction available if not reset and FIFO has valid transaction
             // and packet's destination is not the same as ring_stop
-            $trans_avail = ! $reset && >ring_stop>stall_pipe|fifo_out%+1$trans_valid &&
-                           >ring_stop>stall_pipe|fifo_out>trans%+1$dest != ring_stop;
+            $trans_avail = ! $reset && /ring_stop/stall_pipe|fifo_out>>1$trans_valid &&
+                           /ring_stop/stall_pipe|fifo_out/trans>>1$dest != ring_stop;
             $trans_valid = $trans_avail && ! $blocked;
             ?$trans_valid
-               $ANY = >ring_stop>stall_pipe|fifo_out>trans%+1$ANY;
+               $ANY = /ring_stop/stall_pipe|fifo_out/trans>>1$ANY;
    //            (  hop,    in_pipe, in_stage, out_pipe, out_stage, reset_scope,  reset_stage, reset_sig)
-   m4+simple_ring(ring_stop, ring_in,    0,     ring_out,     0,     >top|default,      1,       $reset  )
+   m4+simple_ring(ring_stop, ring_in,    0,     ring_out,     0,     /top|default,      1,       $reset  )
    
-   >ring_stop[*]
+   /ring_stop[*]
       // Stall Pipeline
-      >stall_pipe
+      /stall_pipe
          |stall0
             @0
-               $reset = >top|default%+1$reset;
-               $trans_avail = ! $reset && >top>tb>ring_stop|send%+1$trans_valid;
+               $reset = /top|default>>1$reset;
+               $trans_avail = ! $reset && /top/tb/ring_stop|send>>1$trans_valid;
                $trans_valid = $trans_avail && ! $blocked;
                ?$trans_valid
-                  >trans
-                     $ANY = >top>tb>ring_stop|send>trans_out%+1$ANY;
+                  /trans
+                     $ANY = /top/tb/ring_stop|send/trans_out>>1$ANY;
          |stall3
             @0
-               $reset = >top|default%+1$reset;
+               $reset = /top|default>>1$reset;
       
       // The input transaction.
-      >stall_pipe
+      /stall_pipe
          //               (   top,     name,  first_cycle, last_cycle)
          m4+stall_pipeline(stall_pipe, stall,      0,          3     )
          
          // FIFO
          //             (   top,     in_pipe, in_stage, out_pipe, out_stage, depth, trans_hier)
-         m4+flop_fifo_v2(stall_pipe, stall3,     0,     fifo_out,    0,        4,     >trans)
+         m4+flop_fifo_v2(stall_pipe, stall3,     0,     fifo_out,    0,        4,     /trans)
          |fifo_out
             @0
                // blocked if destination is same as ring_stop
@@ -151,50 +152,50 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
       // Free-Flow Pipeline after Ring Out
       |pipe1
          @0
-            $trans_valid = >ring_stop|ring_out%+1$trans_valid;
+            $trans_valid = /ring_stop|ring_out>>1$trans_valid;
             ?$trans_valid
-               >trans
-                  $ANY = >ring_stop|ring_out%+1$ANY;
+               /trans
+                  $ANY = /ring_stop|ring_out>>1$ANY;
       
       // Arb
       |arb_out
          @0
             // bypass if pipe1 does not have a valid transaction and FIFO does
             // and packet's destination is same as ring_stop
-            $bypass = !(>ring_stop|pipe1%+1$trans_valid) &&
-                      >ring_stop>stall_pipe|fifo_out%+1$trans_valid &&
-                      >ring_stop>stall_pipe|fifo_out>trans%+1$dest == ring_stop;
+            $bypass = !(/ring_stop|pipe1>>1$trans_valid) &&
+                      /ring_stop/stall_pipe|fifo_out>>1$trans_valid &&
+                      /ring_stop/stall_pipe|fifo_out/trans>>1$dest == ring_stop;
             $trans_valid = $bypass ||
-                           >ring_stop|pipe1%+1$trans_valid;
+                           /ring_stop|pipe1>>1$trans_valid;
             ?$trans_valid
-               >trans
-                  $ANY = |arb_out$bypass ? >ring_stop>stall_pipe|fifo_out>trans%+1$ANY :
-                                           >ring_stop|pipe1>trans%+1$ANY;
+               /trans
+                  $ANY = |arb_out$bypass ? /ring_stop/stall_pipe|fifo_out/trans>>1$ANY :
+                                           /ring_stop|pipe1/trans>>1$ANY;
       
       // Free-Flow Pipeline after Arb
-      >pipe2
+      /pipe2
          |pipe2
             @0
-               $reset = >top|default%+1$reset;
-               $trans_avail = ! $reset && >ring_stop|arb_out%+1$trans_valid;
+               $reset = /top|default>>1$reset;
+               $trans_avail = ! $reset && /ring_stop|arb_out>>1$trans_valid;
                $trans_valid = $trans_avail && ! $blocked;
                ?$trans_valid
-                  >trans
-                     $ANY = >ring_stop|arb_out>trans%+1$ANY;
+                  /trans
+                     $ANY = /ring_stop|arb_out/trans>>1$ANY;
          
          // FIFO2
          //             ( top,  in_pipe, in_stage, out_pipe,  out_stage, depth, trans_hier)
-         m4+flop_fifo_v2(pipe2, pipe2,      0,     fifo2_out,     0,       4,     >trans)
+         m4+flop_fifo_v2(pipe2, pipe2,      0,     fifo2_out,     0,       4,     /trans)
          |fifo2_out
             @0
                $blocked = 1'b0;
    
    // Print
-   >ring_stop[*]
-      >stall_pipe
+   /ring_stop[*]
+      /stall_pipe
          |stall0
             @0
-               >trans
+               /trans
                   \SV_plus
                      always_ff @(posedge clk) begin
                         \$display("\|stall0[%0d]", ring_stop);
@@ -202,7 +203,7 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                      end
          |stall1
             @0
-               >trans
+               /trans
                   \SV_plus
                      always_ff @(posedge clk) begin
                         \$display("\|stall1[%0d]", ring_stop);
@@ -210,7 +211,7 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                      end
          |stall2
             @0
-               >trans
+               /trans
                   \SV_plus
                      always_ff @(posedge clk) begin
                         \$display("\|stall2[%0d]", ring_stop);
@@ -218,7 +219,7 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                      end
          |stall3
             @0
-               >trans
+               /trans
                   \SV_plus
                      always_ff @(posedge clk) begin
                         \$display("\|stall3[%0d]", ring_stop);
@@ -226,7 +227,7 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                      end
          |fifo_out
             @0
-               >trans
+               /trans
                   \SV_plus
                      always_ff @(posedge clk) begin
                         \$display("\|fifo_out[%0d]", ring_stop);
@@ -248,7 +249,7 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                end
       |pipe1
          @0
-            >trans
+            /trans
                \SV_plus
                   always_ff @(posedge clk) begin
                      \$display("\|pipe1[%0d]", ring_stop);
@@ -256,16 +257,16 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                   end
       |arb_out
          @0
-            >trans
+            /trans
                \SV_plus
                   always_ff @(posedge clk) begin
                      \$display("\|arb_out[%0d]", ring_stop);
                      \$display("Destination: %0d", $dest);
                   end
-      >pipe2
+      /pipe2
          |pipe2
             @0
-               >trans
+               /trans
                   \SV_plus
                      always_ff @(posedge clk) begin
                         \$display("\|pipe2[%0d]", ring_stop);
@@ -273,7 +274,7 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                      end
          |fifo2_out
             @0
-               >trans
+               /trans
                   \SV_plus
                      always_ff @(posedge clk) begin
                         \$display("\|fifo2_out[%0d]", ring_stop);
