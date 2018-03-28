@@ -1,0 +1,277 @@
+#!/usr/bin/perl
+# -*- mode: perl; indent-tabs-mode: nil; perl-indent-level: 2; cperl-indent-level: 2; -*-
+
+# Copyright (c) 2014, Intel Corporation
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+# 
+#     * Redistributions of source code must retain the above copyright notice,
+#       this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Intel Corporation nor the names of its contributors
+#       may be used to endorse or promote products derived from this software
+#       without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+#
+#
+# A stream preprocessor to run prior to m4 for SandPiper.
+# This provides a cleaner syntax for macro instantiation than raw M4.
+# This is all a temporary measure until macros are properly supported
+# in SandPiper.
+#
+# Run with no args.  Transforms stdin to stdout.
+#
+# Transforms code as in the following example:
+# STDIN:
+# \m4+foo(|pipe, @stage)
+#    |pipe
+#       @stage
+#          ...
+# \TLV
+#    m4+foo(|my_pipe, @3)
+#
+# STDOUT:
+# \TLV  ['// m4+macro(|pipe, @stage):']m4_define_plus2(['foo'], ['['
+#    ']$1['
+#       ']$2['
+#          ...']'], ['{|pipe}'], ['{@stage}'])
+# \TLV
+#    m4_foo(['   '], ['UNUSED1'], ['UNUSED2'], ['   // Instantiated from src.tlv, 20 as: m4+foo(...)'], |my_pipe, @3)
+#
+# Macro definitions must be top-level.
+
+my $prog = "pre_m4";  # For some reason, $0 isn't working ???
+
+use strict;
+use warnings;
+
+my $STRIP_MACRO_DEFINITIONS = 1;  # 1 to support usage where \m4+macro definitions are not included in m4 output.
+                                  # `line and \source directives are required for code regions to associate line numbers.
+                                  # This will likely become the default and a 0 value may be depricated.
+                                  # Be sure to build libraries w/ make_all if this is changed.
+
+my $lib_flag = 0;
+while (my $arg = shift(@ARGV)) {
+  if ($arg eq "-l") {
+    # library file.
+    $lib_flag = 1;
+  }
+}
+
+
+
+# Configure m4.
+if (! $lib_flag) {
+  print "m4_changecom(`//')m4_changequote(`[*', `*]')m4_changequote([*['*], [*']*])m4_include(['generic_tlv.m4'])m4_include(['rw_tlv.m4'])";
+  # Convey setting to m4 processing.
+  print "m4_define(['m4_strip_macro_definitions'], ['$STRIP_MACRO_DEFINITIONS'])";
+}
+
+my $FIRST_ARG_INDEX = 1;  # The first argument of a macro becomes "\$$FIRST_ARG_INDEX".
+my @args = ();       # Macro arguments.
+my $body = "";       # Macro body currently being processed.
+my $body_cnt = 0;    # The number of lines in $body (including declaration line, which is "\n" in $body).
+my $newlines = "";   # Save up blank lines so we can decide what to do with them.
+my $region_comment_lines = ""; # Region comments and subsequent blank lines.
+my $source_tag_needed = 0;  # Flags that the last region will be missing after m4 processing (or expanded) and
+                            # a \source region tag will be required to reestablish alignment.
+my $done = 0;
+my $SYMBOLS_PATTERN = "\~\`\@\#\$\%\^\&\*\+\=\|\\\:\"\'\.\?\/<>";
+my $i;
+my $arg;
+my $macro_args;
+my $line_num = 0;
+# For each line of the file, plus one final iteration with $line == "";
+do {
+  # Read $line and treat EOF as "".
+  my $line = <STDIN>;
+  $line_num++;
+  if (!$line) {
+    $done = 1;
+    $line = "";
+  }
+  
+
+  if ($line !~ m#^(//|\n)#) {
+    # Non- blank/region-comment line.
+    
+    # Determine whether the line starts a region.
+    # "\" is interpreted as starting a region line as is "m4+".
+    my $region_line = $line =~ /^(\\|m4+)/;
+    
+    # Process macro body lines.
+    if ($body_cnt) {
+      # Substitute line prefix char to be followed by indentation m4_macro argument, and this
+      # substitution is also the check to see if we terminate the macro body.
+      my $padding_arg_num = $#args + 2;
+      if ($region_line) {
+        # Terminate macro definition $body.
+        # Note that EOF line will come here.
+        
+        # We can drop blank lines at end of body after m4 processing, but alignment must be preserved
+        # through this script, so we insert a macro that will drop the $newlines.
+        if ($STRIP_MACRO_DEFINITIONS && $newlines) {
+          $newlines = "m4_nothing(['$newlines'])";
+        }
+
+        
+        # Substitute $args in $body.
+        # We need to append a char to the end of $body to properly match at end of body.
+        $body .= "\n";
+        for($i = 0; $i <= $#args; $i++) {
+          $arg = $args[$i];
+          my $arg_index = $FIRST_ARG_INDEX + $i;
+          $body =~ s/$arg/$1\$\']\['$arg_index$2/g;
+        }
+        chomp $body;  # Remove the "\n" we added above.
+        
+        # Close the code block argument and close macro args list before body's trailing "\n".
+        # Extract the "\n", close body, then restore "\n".
+        my $nl = chomp($body);
+        $body .= "'\]'\], $macro_args)";
+        if ($nl) {
+          if ($STRIP_MACRO_DEFINITIONS) {
+            # Exclude definition line after m4 processing.
+            $body .= "m4_dnl\n"
+          } else {
+            $body .= "\n";
+          }
+        }
+        
+        $source_tag_needed = 1;
+        
+        $body_cnt = 0;
+      } else {
+        # Make sure there are no $<#>'s, $#'s, or $@'s in the body line, as these will substitute with
+        # M4+ args which should be under the control of this script.
+        # (It would be difficult to properly escape them because escaping depends on the number of levels deep
+        # of quoting in which they are contained.)
+        if ($line =~ /(\$[1-9#\@])/) {
+          print STDERR "pre_m4: Error: Found \"$1\", which is not permitted inside m4+ macro definition, at line $line_num.\n";
+          exit(100);
+        }
+        
+        $body_cnt++;
+      }
+    }
+    
+    if ($region_line) {
+      # Substitute \TLV macro(..) definitions.
+      if ($line =~ s/^\\TLV (\w+)\(\s*(.*)\s*\).*\n$/\\TLV \['\/\/\\TLV $1\($2\)\:'\]m4_define_plus2\(\['$1'\], \['\['\n/) {
+        my $macro_name = $1;
+        $macro_args = $2;
+        if ($STRIP_MACRO_DEFINITIONS) {
+          # Exclude \TLV line content, but not macro definition.
+          $line =~ s/^.*\](m4_)/$1/;
+          
+          # Any comments preceding this region should be excluded.
+          if ($region_comment_lines) {
+            $region_comment_lines = "m4_nothing(['$region_comment_lines'])";
+          }
+        }
+        
+        if ($body_cnt) {
+          print STDERR "\n$prog Bug: Found macro definition inside macro body.\n";
+          exit(100);
+        }
+        # Extract arguments.
+        @args = split(/\s*,\s*/, $macro_args);
+        # Quotify $macro_args.
+        if ($#args >= 0) {
+          $macro_args = "['{" . join("}'], ['{", @args) . "}']";
+        }
+        
+        # Translate arg strings into regular expressions that match the args with proper bookend characters (not edge of string).
+        for($i = 0; $i <= $#args; $i++) {
+          $arg = $args[$i];
+          # Validate arg as proper identifier.
+          if ($arg !~ /^([${SYMBOLS_PATTERN}]*)(\w+)$/) {
+            print STDERR "\n$prog Error: Macro argument \"$arg\" doesn't match TL-X identifier syntax.\n";
+            exit(100);
+          }
+          my $prefix = $1;
+          my $name = $2;
+          # Determine the patter matching the class of characters starting the parameter name.
+          # The match may not be preceded by this class (or followed by a word char).
+          my $start_class = "";
+          if ($prefix) {
+            $start_class = ${SYMBOLS_PATTERN};
+          } else {
+            $start_class = "\\w";
+          }
+          # The pattern to match with proper bookends. (Note that $body will begin with indentation and
+          # end w/ a "\n", so we need not worry about matching at the beginning or end.)
+          $args[$i] = qr/([^${start_class}])\Q$arg\E([\W])/;
+        }
+        
+        # Found a definition line. Start the $body.
+        $body_cnt++;
+      } else {
+        # Not a macro definition.
+        
+        # Insert \source line if needed, without affecting line alignment of this script's output.
+        if ($source_tag_needed) {
+          my $source_line_num = $line_num - 1;
+          $region_comment_lines = "\\source m4_escaped_string(m4_FILE) ${source_line_num}['']m4_new_line()" . $region_comment_lines;
+          $source_tag_needed = 0;
+        }
+      
+        # Region lines beginning with m4+ are m4_ macros that expand to a different number of lines (preferably zero, because
+        # their output lines will not have correct source association).
+        # They continue until the next region line.
+        # They need a source line inserted after them.
+        if ($line =~ s/^m4\+/m4_/) {
+          $source_tag_needed = 1;
+        }
+      }
+
+    } else {
+      # Not a region line (incl. \m4+).
+
+      # Substitute m4+macro(..) instantiations (using simplistic parsing).
+      # Macro body is in quoted context, and m4_FILE must be outside of that.
+      my $m4___line__ = ($body_cnt > 0) ? "']']m4___line__['['" : "m4___line__";
+      $line =~ s/^([ !] +)(m4\+(\w+)\((.*))/$1m4_$3\(\['$1'\], \['UNUSED1'\], \['UNUSED2'\], ['   \/\/ Instantiated from ']m4_FILE[', ']${m4___line__}[' as: $2'], $4/;
+    }
+    
+    # Include previous blank/comment lines in $line for output.
+    $line = $newlines . $region_comment_lines . $line;
+    $region_comment_lines = "";
+    $newlines = "";
+    
+    # Output $line (either print or absorb into $body).
+    if ($body_cnt > 1) {
+      $body .= $line;
+    } else {
+      print $body . $line;
+      $body = "";
+    }
+  } else {
+    # Blank line or region comment line. Hold on to it before deciding what to do.
+    if ($region_comment_lines || ($line =~ m#^//#)) {
+      # Comment line or blank line after comment(s).
+      $region_comment_lines .= $line;
+    } else {
+      $newlines .= $line;
+    }
+  }
+} while (!$done);
+if ($body_cnt) {
+  print STDERR "\n$prog Error: Failed to exit macro at EOF.\n";
+  exit(100);
+}
