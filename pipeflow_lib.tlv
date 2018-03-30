@@ -230,7 +230,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             /trans
                $ANY = |m4_out_pipe/trans_hold$ANY;
 
-
 // A Stall Pipeline.
 // m4_stall_pipeline(top, name, first_cycle, last_cycle)
 //
@@ -469,6 +468,7 @@ m4_popdef(['m4_out_stage'])
 //
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
 
+
 m4_unsupported(['m4_flop_fifo'], 1)
 \TLV m4_flop_fifo_v2(/m4_top,|m4_in_pipe,@m4_in_at,|m4_out_pipe,@m4_out_at,#m4_depth,#m4_trans_hier,#m4_high_water)
    m4_pushdef(['m4_ptr_width'], \$clog2(#m4_depth))
@@ -627,6 +627,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
             $ANY = /read2$ANY;
    */
 
+
 // A FIFO using simple_bypass_fifo.
 // Requires include "simple_bypass_fifo.sv".
 //
@@ -649,7 +650,6 @@ m4_unsupported(['m4_flop_fifo'], 1)
       @m4_out_at
          $trans_avail = /m4_top/fifo>>m4_align(0, @m4_out_at)$cnt != 3'b0 || /m4_top|m4_in_pipe>>m4_align(@m4_in_at, @m4_out_at)$trans_avail;
          $trans_valid = $trans_avail && !$blocked;
-
 
 
 // A FIFO using simple_bypass_fifo.
