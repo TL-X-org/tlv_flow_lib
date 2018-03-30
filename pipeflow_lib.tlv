@@ -214,14 +214,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //            /trans
 //               $ANY     // Output transaction
 //
-m4_define_plus(['m4_stall_stage'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_stage'],  ['$7'])
-m4_pushdef(['m4_out_pipe'],  ['$8'])
-m4_pushdef(['m4_out_stage'], ['$9'])
+\TLV m4_stall_stage(/m4_top,|m4_in_pipe,@m4_in_stage,|m4_out_pipe,@m4_out_stage)
 
-'], m4___file__, m4___line__, ['
    |m4_in_pipe
       @m4_in_stage
          $blocked = /m4_top|m4_out_pipe<>0$blocked;
@@ -235,15 +229,6 @@ m4_pushdef(['m4_out_stage'], ['$9'])
          ?$trans_avail
             /trans
                $ANY = |m4_out_pipe/trans_hold$ANY;
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_stage'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_stage'])
-'])
 
 
 // A Stall Pipeline.
@@ -485,128 +470,113 @@ m4_popdef(['m4_out_stage'])
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
 
 m4_unsupported(['m4_flop_fifo'], 1)
-m4_define_plus(['m4_flop_fifo_v2'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_at'],     ['$7'])
-m4_pushdef(['m4_out_pipe'],  ['$8'])
-m4_pushdef(['m4_out_at'],    ['$9'])
-m4_pushdef(['m4_depth'],     ['$10'])
-m4_pushdef(['m4_trans_hier'],['$11'])  // Eg: ['/flit'] or ['']
-m4_pushdef(['m4_high_water'],['$12'])  // Default to 0.  Number of additional entries beyond full.
-
-m4_pushdef(['m4_ptr_width'], \$clog2(m4_depth))
-m4_pushdef(['m4_counter_width'], \$clog2((m4_depth)+1))
-m4_pushdef(['m4_bypass_align'], m4_align(m4_out_at, m4_in_at))
-m4_pushdef(['m4_reverse_bypass_align'], m4_align(m4_in_at, m4_out_at))
-m4_pushdef(['m4_trans_ind'], m4_ifelse(m4_trans_hier, [''], [''], ['   ']))
-
-'], m4___file__, m4___line__, ['
-   //|default
+\TLV m4_flop_fifo_v2(/m4_top,|m4_in_pipe,@m4_in_at,|m4_out_pipe,@m4_out_at,#m4_depth,#m4_trans_hier,#m4_high_water)
+   m4_pushdef(['m4_ptr_width'], \$clog2(#m4_depth))
+   m4_pushdef(['m4_counter_width'], \$clog2((#m4_depth)+1))
+   m4_pushdef(['m4_bypass_align'], m4_align(@m4_out_at, @m4_in_at))
+   m4_pushdef(['m4_reverse_bypass_align'], m4_align(@m4_in_at,@m4_out_at))
+   m4_pushdef(['m4_trans_ind'], m4_ifelse(#m4_trans_hier, [''], [''], ['   ']))
    //   @0
    \SV_plus
-      localparam bit [m4_counter_width-1:0] full_mark_['']m4_plus_inst_id = m4_depth - m4_ifelse(m4_high_water, [''], 0, ['m4_high_water']);
-
+      localparam bit [m4_counter_width-1:0] full_mark_['']m4_plus_inst_id = #m4_depth - m4_ifelse(#m4_high_water, [''], 0, ['#m4_high_water']);
    // FIFO Instantiation
-
    // Hierarchy declarations
    |m4_in_pipe
-      /entry[(m4_depth)-1:0]
+      /entry[(#m4_depth)-1:0]
    |m4_out_pipe
-      /entry[(m4_depth)-1:0]
-
-   // Hierarchy
-   |m4_in_pipe
-      @m4_in_at
-         $out_blocked = /m4_top|m4_out_pipe>>m4_bypass_align$blocked;
-         $blocked = >>1$full && $out_blocked;
-         `BOGUS_USE($blocked)   // Not required to be consumed elsewhere.
-         $would_bypass = >>1$empty;
-         $bypass = $would_bypass && ! $out_blocked;
-         $push = $trans_valid && ! $bypass;
-         $grow   =   $trans_valid &&   $out_blocked;
-         $shrink = ! $trans_avail && ! $out_blocked && ! >>1$empty;
-         $valid_count[m4_counter_width-1:0] = $reset ? '0
-                                                     : >>1$valid_count + (
-                                                          $grow   ? { {(m4_counter_width-1){1'b0}}, 1'b1} :
-                                                          $shrink ? '1
-                                                                  : '0
-                                                       );
-         // At least 2 valid entries.
-         //$two_valid = | $ValidCount[m4_counter_width-1:1];
-         // but logic depth minimized by taking advantage of prev count >= 4.
-         $two_valid = | >>1$valid_count[m4_counter_width-1:2] || | $valid_count[2:1];
-         // These are an optimization of the commented block below to operate on vectors, rather than bits.
-         // TODO: Keep optimizing...
-         {/entry[*]$$prev_entry_was_tail} = {/entry[*]>>1$reconstructed_is_tail\[m4_eval(m4_depth-2):0], /entry[m4_eval(m4_depth-1)]>>1$reconstructed_is_tail} /* circular << */;
-         {/entry[*]$$push} = {m4_depth{$push}} & /entry[*]$prev_entry_was_tail;
+      /entry[(#m4_depth)-1:0]
+          
+      |m4_in_pipe
+         @m4_in_at
+            $out_blocked = /m4_top|m4_out_pipe>>m4_bypass_align$blocked;
+            $blocked = >>1$full && $out_blocked;
+            `BOGUS_USE($blocked)   // Not required to be consumed elsewhere.
+            $would_bypass = >>1$empty;
+            $bypass = $would_bypass && ! $out_blocked;
+            $push = $trans_valid && ! $bypass;
+            $grow   =   $trans_valid &&   $out_blocked;
+            $shrink = ! $trans_avail && ! $out_blocked && ! >>1$empty;
+            $valid_count[m4_counter_width-1:0] = $reset ? '0
+                                                        : >>1$valid_count + (
+                                                             $grow   ? { {(m4_counter_width-1){1'b0}}, 1'b1} :
+                                                             $shrink ? '1
+                                                                     : '0
+                                                          );
+            // At least 2 valid entries.
+            //$two_valid = | $ValidCount[m4_counter_width-1:1];
+            // but logic depth minimized by taking advantage of prev count >= 4.
+            $two_valid = | >>1$valid_count[m4_counter_width-1:2] || | $valid_count[2:1];
+            // These are an optimization of the commented block below to operate on vectors, rather than bits.
+            // TODO: Keep optimizing...
+            {/entry[*]$$prev_entry_was_tail} = {/entry[*]>>1$reconstructed_is_tail\[m4_eval(#m4_depth-2):0], /entry[m4_eval(#m4_depth-1)]>>1$reconstructed_is_tail} /* circular << */;
+            {/entry[*]$$push} = {#m4_depth{$push}} & /entry[*]$prev_entry_was_tail;
+            /entry[*]
+               // Replaced with optimized versions above:
+               // $prev_entry_was_tail = /entry[(entry+(m4_depth)-1)%(m4_depth)]>>1$reconstructed_is_tail;
+               // $push = |m4_in_pipe$push && $prev_entry_was_tail;
+               $valid = (>>1$reconstructed_valid && ! /m4_top|m4_out_pipe/entry>>m4_bypass_align$pop) || $push;
+               $is_tail = |m4_in_pipe$trans_valid ? $prev_entry_was_tail  // shift tail
+                                                  : >>1$reconstructed_is_tail;  // retain tail
+               $state = |m4_in_pipe$reset ? 1'b0
+                                          : $valid && ! (|m4_in_pipe$two_valid && $is_tail);
+         @m4_eval(@m4_in_at + 1)
+            $empty = ! $two_valid && ! $valid_count[0];
+            $full = ($valid_count == full_mark_['']m4_plus_inst_id);  // Could optimize for power-of-two depth.
          /entry[*]
-            // Replaced with optimized versions above:
-            // $prev_entry_was_tail = /entry[(entry+(m4_depth)-1)%(m4_depth)]>>1$reconstructed_is_tail;
-            // $push = |m4_in_pipe$push && $prev_entry_was_tail;
-            $valid = (>>1$reconstructed_valid && ! /m4_top|m4_out_pipe/entry>>m4_bypass_align$pop) || $push;
-            $is_tail = |m4_in_pipe$trans_valid ? $prev_entry_was_tail  // shift tail
-                                               : >>1$reconstructed_is_tail;  // retain tail
-            $state = |m4_in_pipe$reset ? 1'b0
-                                       : $valid && ! (|m4_in_pipe$two_valid && $is_tail);
-      @m4_eval(m4_in_at + 1)
-         $empty = ! $two_valid && ! $valid_count[0];
-         $full = ($valid_count == full_mark_['']m4_plus_inst_id);  // Could optimize for power-of-two depth.
-      /entry[*]
-         @m4_eval(m4_in_at + 1)
-            $prev_entry_state = /entry[(entry+(m4_depth)-1)%(m4_depth)]$state;
-            $next_entry_state = /entry[(entry+1)%(m4_depth)]$state;
-            $reconstructed_is_tail = (  /m4_top|m4_in_pipe$two_valid && (!$state && $prev_entry_state)) ||
-                                     (! /m4_top|m4_in_pipe$two_valid && (!$next_entry_state && $state)) ||
-                                     (|m4_in_pipe$empty && (entry == 0));  // need a tail when empty for push
-            $is_head = $state && ! $prev_entry_state;
-            $reconstructed_valid = $state || (/m4_top|m4_in_pipe$two_valid && $prev_entry_state);
-   // Write data
-   |m4_in_pipe
-      @m4_in_at
-         /entry[*]
-            //?$push
-            //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
-            m4_trans_hier
-m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']m4_trans_hier$ANY : >>1$ANY /* RETAIN */;
-   // Read data
-   |m4_out_pipe
-      @m4_out_at
-         //$pop  = ! /m4_top|m4_in_pipe>>m4_align(m4_in_at + 1, m4_out_at)$empty && ! $blocked;
-         /entry[*]
-            $is_head = /m4_top|m4_in_pipe/entry>>m4_align(m4_in_at + 1, m4_out_at)$is_head;
-            $pop  = $is_head && ! |m4_out_pipe$blocked;
-            /read_masked
-               m4_trans_hier
-m4_trans_ind               $ANY = /entry$is_head ? /m4_top|m4_in_pipe/entry['']m4_trans_hier>>m4_align(m4_in_at + 1, m4_out_at)$ANY /* $aNY */ : '0;
-            /accum
-               m4_trans_hier
-m4_trans_ind               $ANY = ((entry == 0) ? '0 : /entry[(entry+(m4_depth)-1)%(m4_depth)]/accum['']m4_trans_hier$ANY) |
-                          /entry/read_masked['']m4_trans_hier$ANY;
-         /head
-            $trans_avail = |m4_out_pipe$trans_avail;
-            ?$trans_avail
-               m4_trans_hier
-m4_trans_ind               $ANY = /m4_top|m4_out_pipe/entry[(m4_depth)-1]/accum['']m4_trans_hier$ANY;
+            @m4_eval(@m4_in_at + 1)
+               $prev_entry_state = /entry[(entry+(#m4_depth)-1)%(#m4_depth)]$state;
+               $next_entry_state = /entry[(entry+1)%(#m4_depth)]$state;
+               $reconstructed_is_tail = (  /m4_top|m4_in_pipe$two_valid && (!$state && $prev_entry_state)) ||
+                                        (! /m4_top|m4_in_pipe$two_valid && (!$next_entry_state && $state)) ||
+                                        (|m4_in_pipe$empty && (entry == 0));  // need a tail when empty for push
+               $is_head = $state && ! $prev_entry_state;
+               $reconstructed_valid = $state || (/m4_top|m4_in_pipe$two_valid && $prev_entry_state);
+      // Write data
+      |m4_in_pipe
+         @m4_in_at
+            /entry[*]
+               //?$push
+               //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
+               #m4_trans_hier
+   m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']#m4_trans_hier$ANY : >>1$ANY /* RETAIN */;
+      // Read data
+      |m4_out_pipe
+         @m4_out_at
+            //$pop  = ! /m4_top|m4_in_pipe>>m4_align(m4_in_at + 1, m4_out_at)$empty && ! $blocked;
+            /entry[*]
+               $is_head = /m4_top|m4_in_pipe/entry>>m4_align(@m4_in_at + 1, @m4_out_at)$is_head;
+               $pop  = $is_head && ! |m4_out_pipe$blocked;
+               /read_masked
+                  #m4_trans_hier
+   m4_trans_ind               $ANY = /entry$is_head ? /m4_top|m4_in_pipe/entry['']#m4_trans_hier>>m4_align(@m4_in_at + 1, @m4_out_at)$ANY /* $aNY */ : '0;
+               /accum
+                  #m4_trans_hier
+   m4_trans_ind               $ANY = ((entry == 0) ? '0 : /entry[(entry+(#m4_depth)-1)%(#m4_depth)]/accum['']#m4_trans_hier$ANY) |
+                             /entry/read_masked['']#m4_trans_hier$ANY;
+            /head
+               $trans_avail = |m4_out_pipe$trans_avail;
+               ?$trans_avail
+                  m4_trans_hier
+   m4_trans_ind               $ANY = /m4_top|m4_out_pipe/entry[(#m4_depth)-1]/accum['']#m4_trans_hier$ANY;
+      // Bypass
+      |m4_out_pipe
+         @m4_out_at
+            // Available output.  Sometimes it's necessary to know what would be coming to determined
+            // if it's blocked.  This can be used externally in that case.
+            /fifo_head
+               $trans_avail = |m4_out_pipe$trans_avail;
+               ?$trans_avail
+                  #m4_trans_hier
+   m4_trans_ind               $ANY = /m4_top|m4_in_pipe>>m4_reverse_bypass_align$would_bypass
+   m4_trans_ind                            ? /m4_top|m4_in_pipe['']#m4_trans_hier>>m4_reverse_bypass_align$ANY
+   m4_trans_ind                            : |m4_out_pipe/head['']#m4_trans_hier$ANY;
+            $trans_avail = ! /m4_top|m4_in_pipe>>m4_reverse_bypass_align$would_bypass || /m4_top|m4_in_pipe>>m4_reverse_bypass_align$trans_avail;
+            $trans_valid = $trans_avail && ! $blocked;
+            ?$trans_valid
+               #m4_trans_hier
+   m4_trans_ind            $ANY = |m4_out_pipe/fifo_head['']#m4_trans_hier$ANY;
 
-   // Bypass
-   |m4_out_pipe
-      @m4_out_at
-         // Available output.  Sometimes it's necessary to know what would be coming to determined
-         // if it's blocked.  This can be used externally in that case.
-         /fifo_head
-            $trans_avail = |m4_out_pipe$trans_avail;
-            ?$trans_avail
-               m4_trans_hier
-m4_trans_ind               $ANY = /m4_top|m4_in_pipe>>m4_reverse_bypass_align$would_bypass
-m4_trans_ind                            ? /m4_top|m4_in_pipe['']m4_trans_hier>>m4_reverse_bypass_align$ANY
-m4_trans_ind                            : |m4_out_pipe/head['']m4_trans_hier$ANY;
-         $trans_avail = ! /m4_top|m4_in_pipe>>m4_reverse_bypass_align$would_bypass || /m4_top|m4_in_pipe>>m4_reverse_bypass_align$trans_avail;
-         $trans_valid = $trans_avail && ! $blocked;
-         ?$trans_valid
-            m4_trans_hier
-m4_trans_ind            $ANY = |m4_out_pipe/fifo_head['']m4_trans_hier$ANY;
-
+   
 
 
    /* Alternate code for pointer indexing.  Replaces $ANY expression above.
@@ -656,72 +626,30 @@ m4_trans_ind            $ANY = |m4_out_pipe/fifo_head['']m4_trans_hier$ANY;
          ?$trans_valid
             $ANY = /read2$ANY;
    */
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_at'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_at'])
-m4_popdef(['m4_depth'])
-m4_popdef(['m4_trans_hier'])
-m4_pushdef(['m4_high_water'])
-
-m4_popdef(['m4_ptr_width'])
-m4_popdef(['m4_counter_width'])
-m4_popdef(['m4_bypass_align'])
-m4_popdef(['m4_reverse_bypass_align'])
-m4_popdef(['m4_trans_ind'])
-'])
-
 
 // A FIFO using simple_bypass_fifo.
 // Requires include "simple_bypass_fifo.sv".
 //
 // The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
 //
-m4_define_plus(['m4_old_simple_bypass_fifo_v2'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_at'],     ['$7'])
-m4_pushdef(['m4_out_pipe'],  ['$8'])
-m4_pushdef(['m4_out_at'],    ['$9'])
-m4_pushdef(['m4_depth'],     ['$10'])
-m4_pushdef(['m4_width'],     ['$11'])
-m4_pushdef(['m4_trans_hier'],['$12'])  // Eg: ['/flit'] or ['']
-m4_pushdef(['m4_high_water'],['$13'])  // Default to 0.  Number of additional entries beyond full.
-
-'], m4___file__, m4___line__, ['
+\TLV m4_old_simple_bypass_fifo_v2(/m4_top,|m4_in_pipe,@m4_in_at,|m4_out_pipe,@m4_out_at,#m4_depth,#m4_width,#m4_trans_hier,#m4_high_water)
    |m4_in_pipe
       @m4_in_at
-         $out_blocked = /m4_top|m4_out_pipe>>m4_align(m4_out_at, m4_in_at)$blocked;
-         $blocked = (/m4_top/fifo>>m4_align(0, m4_in_at)$cnt >= m4_eval(m4_depth - m4_ifelse(m4_high_water, [''], 0, ['m4_high_water']))) && $out_blocked;
+         $out_blocked = /m4_top|m4_out_pipe>>m4_align(@m4_out_at, @m4_in_at)$blocked;
+         $blocked = (/m4_top/fifo>>m4_align(0, @m4_in_at)$cnt >= m4_eval(#m4_depth - m4_ifelse(#m4_high_water, [''], 0, ['#m4_high_water']))) && $out_blocked;
    /fifo
-      simple_bypass_fifo #(.WIDTH(m4_width), .DEPTH(m4_depth))
-         fifo(.clk(clk), .reset(/m4_top|m4_in_pipe>>m4_align(m4_in_at, 0)$reset),
-              .push(/m4_top|m4_in_pipe>>m4_align(m4_in_at, 0)$trans_valid),
-              .data_in(/m4_top|m4_in_pipe['']m4_trans_hier>>m4_align(m4_in_at, 0)$ANY),
-              .pop(/m4_top|m4_out_pipe>>m4_align(m4_out_at, 0)$trans_valid),
-              .data_out(/m4_top|m4_out_pipe['']m4_trans_hier>>m4_align(m4_out_at, 0)$$ANY),
+      simple_bypass_fifo #(.WIDTH(#m4_width), .DEPTH#(#m4_depth))
+         fifo(.clk(clk), .reset(/m4_top|m4_in_pipe>>m4_align(@m4_in_at, 0)$reset),
+              .push(/m4_top|m4_in_pipe>>m4_align(@m4_in_at, 0)$trans_valid),
+              .data_in(/m4_top|m4_in_pipe['']#m4_trans_hier>>m4_align(@m4_in_at, 0)$ANY),
+              .pop(/m4_top|m4_out_pipe>>m4_align(@m4_out_at, 0)$trans_valid),
+              .data_out(/m4_top|m4_out_pipe['']#m4_trans_hier>>m4_align(@m4_out_at, 0)$$ANY),
               .cnt($$cnt[2:0]));
    |m4_out_pipe
       @m4_out_at
-         $trans_avail = /m4_top/fifo>>m4_align(0, m4_out_at)$cnt != 3'b0 || /m4_top|m4_in_pipe>>m4_align(m4_in_at, m4_out_at)$trans_avail;
+         $trans_avail = /m4_top/fifo>>m4_align(0, @m4_out_at)$cnt != 3'b0 || /m4_top|m4_in_pipe>>m4_align(@m4_in_at, @m4_out_at)$trans_avail;
          $trans_valid = $trans_avail && !$blocked;
-'],
 
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_at'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_at'])
-m4_popdef(['m4_depth'])
-m4_popdef(['m4_width'])
-m4_popdef(['m4_trans_hier'])
-m4_pushdef(['m4_high_water'])
-'])
 
 
 // A FIFO using simple_bypass_fifo.
