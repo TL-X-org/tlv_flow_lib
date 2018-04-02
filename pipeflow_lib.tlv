@@ -638,7 +638,7 @@ m4_trans_ind            $ANY = |_out_pipe/fifo_head['']#_trans_hier$ANY;
          $out_blocked = /_top|_out_pipe>>m4_align(@_out_at, @_in_at)$blocked;
          $blocked = (/_top/fifo>>m4_align(0, @_in_at)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, ['#_high_water']))) && $out_blocked;
    /fifo
-      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH#(#_depth))
+      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
          fifo(.clk(clk), .reset(/_top|m4_in_pipe>>m4_align(@_in_at, 0)$reset),
               .push(/_top|_in_pipe>>m4_align(@_in_at, 0)$trans_valid),
               .data_in(/_top|_in_pipe['']#m4_trans_hier>>m4_align(@_in_at, 0)$ANY),
