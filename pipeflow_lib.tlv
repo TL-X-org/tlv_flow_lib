@@ -532,12 +532,12 @@ m4_unsupported(['m4_flop_fifo'], 1)
             $is_head = $state && ! $prev_entry_state;
             $reconstructed_valid = $state || (/_top|_in_pipe$two_valid && $prev_entry_state);
       // Write data
-      |_in_pipe
-         @_in_at
-            /entry[*]
+   |_in_pipe
+      @_in_at
+         /entry[*]
                //?$push
                //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
-               /_trans_hier
+            /_trans_hier
 m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
       // Read data
    |_out_pipe
