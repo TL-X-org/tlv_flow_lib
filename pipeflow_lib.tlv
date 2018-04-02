@@ -471,7 +471,7 @@ m4_popdef(['m4_out_stage'])
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
 
 m4_unsupported(['m4_flop_fifo'], 1)
-\TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,#_trans_hier,#_high_water)
+\TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_high_water)
    m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
    m4_pushdef(['m4_counter_width'], \$clog2((#_depth)+1))
    m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
@@ -537,8 +537,8 @@ m4_unsupported(['m4_flop_fifo'], 1)
             /entry[*]
                //?$push
                //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
-               #_trans_hier
-m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']#_trans_hier$ANY : >>1$ANY /* RETAIN */;
+               /_trans_hier
+m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
       // Read data
    |_out_pipe
       @_out_at
@@ -547,17 +547,17 @@ m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']#_trans_hier$
             $is_head = /_top|_in_pipe/entry>>m4_align(@_in_at + 1, @_out_at)$is_head;
             $pop  = $is_head && ! |_out_pipe$blocked;
             /read_masked
-               #_trans_hier
-m4_trans_ind               $ANY = /entry$is_head ? /_top|_in_pipe/entry['']#_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
+               /_trans_hier
+m4_trans_ind               $ANY = /entry$is_head ? /_top|_in_pipe/entry['']/_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
             /accum
-               #_trans_hier
-m4_trans_ind               $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']#_trans_hier$ANY) |
-                             /entry/read_masked['']#_trans_hier$ANY;
+               /_trans_hier
+m4_trans_ind               $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans_hier$ANY) |
+                             /entry/read_masked['']/_trans_hier$ANY;
          /head
             $trans_avail = |_out_pipe$trans_avail;
             ?$trans_avail
-                #_trans_hier
-   #_trans_ind               $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']#_trans_hier$ANY;
+                /_trans_hier
+m4_trans_ind               $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans_hier$ANY;
       // Bypass
       |_out_pipe
          @_out_at
@@ -566,15 +566,15 @@ m4_trans_ind               $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1
             /fifo_head
                $trans_avail = |_out_pipe$trans_avail;
                ?$trans_avail
-                  #_trans_hier
+                  /_trans_hier
 m4_trans_ind               $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
-m4_trans_ind                            ? /_top|_in_pipe['']#_trans_hier>>m4_reverse_bypass_align$ANY
-m4_trans_ind                            : |_out_pipe/head['']#_trans_hier$ANY;
+m4_trans_ind                            ? /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY
+m4_trans_ind                            : |_out_pipe/head['']/_trans_hier$ANY;
          $trans_avail = ! /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass || /_top|_in_pipe>>m4_reverse_bypass_align$trans_avail;
          $trans_valid = $trans_avail && ! $blocked;
          ?$trans_valid
-            #_trans_hier
-m4_trans_ind            $ANY = |_out_pipe/fifo_head['']#_trans_hier$ANY;
+            /_trans_hier
+m4_trans_ind            $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
 
    
 
@@ -632,7 +632,7 @@ m4_trans_ind            $ANY = |_out_pipe/fifo_head['']#_trans_hier$ANY;
 //
 // The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
 //
-\TLV m4_old_simple_bypass_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,#_width,#_trans_hier,#_high_water)
+\TLV m4_old_simple_bypass_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,#_width,/_trans_hier,#_high_water)
    |_in_pipe
       @_in_at
          $out_blocked = /_top|_out_pipe>>m4_align(@_out_at, @_in_at)$blocked;
@@ -641,9 +641,9 @@ m4_trans_ind            $ANY = |_out_pipe/fifo_head['']#_trans_hier$ANY;
       simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
          fifo(.clk(clk), .reset(/_top|m4_in_pipe>>m4_align(@_in_at, 0)$reset),
               .push(/_top|_in_pipe>>m4_align(@_in_at, 0)$trans_valid),
-              .data_in(/_top|_in_pipe['']#m4_trans_hier>>m4_align(@_in_at, 0)$ANY),
+              .data_in(/_top|_in_pipe['']/_trans_hier>>m4_align(@_in_at, 0)$ANY),
               .pop(/_top|_out_pipe>>m4_align(@_out_at, 0)$trans_valid),
-              .data_out(/_top|_out_pipe['']#_trans_hier>>m4_align(@_out_at, 0)$$ANY),
+              .data_out(/_top|_out_pipe['']/_trans_hier>>m4_align(@_out_at, 0)$$ANY),
               .cnt($$cnt[2:0]));
    |_out_pipe
       @_out_at
