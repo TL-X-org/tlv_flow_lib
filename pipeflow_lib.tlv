@@ -220,11 +220,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          $blocked = /_top|_out_pipe<>0$blocked;
    |_out_pipe
       @_out_stage
-         $trans_avail = $blocked ? <<1$trans_avail : /_top|_in_pipe>>1$trans_avail;
+         $trans_avail = $blocked ? >>1$trans_avail : /_top|_in_pipe>>1$trans_avail;
          $trans_valid = $trans_avail && !$blocked;
          ?$trans_valid
             /trans_hold
-               $ANY = |_out_pipe$blocked ? <<1$ANY : /_top|_in_pipe/trans>>1$ANY;
+               $ANY = |_out_pipe$blocked ? >>1$ANY : /_top|_in_pipe/trans>>1$ANY;
          ?$trans_avail
             /trans
                $ANY = |_out_pipe/trans_hold$ANY;
