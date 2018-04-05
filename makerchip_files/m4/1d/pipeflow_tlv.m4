@@ -261,11 +261,11 @@ m4_pushdef(['m4_out_stage'], ['$9'])
          $blocked = /m4_top|m4_out_pipe<>0$blocked;
    |m4_out_pipe
       @m4_out_stage
-         $trans_avail = $blocked ? <<1$trans_avail : /m4_top|m4_in_pipe>>1$trans_avail;
+         $trans_avail = $blocked ? >>1$trans_avail : /m4_top|m4_in_pipe>>1$trans_avail;
          $trans_valid = $trans_avail && !$blocked;
          ?$trans_valid
             /trans_hold
-               $ANY = |m4_out_pipe$blocked ? <<1$ANY : /m4_top|m4_in_pipe/trans>>1$ANY;
+               $ANY = |m4_out_pipe$blocked ? >>1$ANY : /m4_top|m4_in_pipe/trans>>1$ANY;
          ?$trans_avail
             /trans
                $ANY = |m4_out_pipe/trans_hold$ANY;
