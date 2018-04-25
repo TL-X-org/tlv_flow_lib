@@ -39,88 +39,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
 
-
-// A backpressured flop stage.
-// m4_bp_stage(top, in_pipe, in_stage, out_pipe, out_stage[, indentation_str, b_latch, a_latch])
-//
-// Parameters:
-//   top:             eg: 'top'
-//   in/out_pipe/stage: As below.
-//   indentation_str:   eg: '   ' to provide 1 additional level of indentation
-//
-// This creates backpressure and recirculation for a transaction going from in_pipe to out_pipe.
-//
-// |in_pipe
-//   @in_stage|\  +--+
-//      ------| | |  |  |out_pipe@out_stage
-//            | |-|  |-+----
-//         +--| | |/\| |
-//         |  |/  +--+ |
-//         |           |
-//         +-----------+
-//
-// Input interface:
-//   |in_pipe
-//      @in_stage  (minus a phase for SELF)
-//         $trans_avail   // A transaction is available for consumption.
-//         ?$trans_valid = $trans_avail && ! $blocked
-//            $ANY        // input transaction
-//   |out_pipe
-//      @out_stage
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output signals:
-//   |in_pipe
-//      @in_stage
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |out_pipe
-//      @out_stage
-//         $trans_avail   // A transaction is available for consumption.
-//                        // (Actually, @out_stage-1, but expect consumption in @out_stage.)
-//         ?($trans_avail && ! $blocked)
-//            $ANY        // Output transaction
-//
-// This macro also supports SELF (Synchronous ELastic Flow) pipelines that are latch-based pipelines
-// with backpressure at every phase.
-// In this case, the input stage is the cycle feeding the recirculation, and the output stage is
-// the cycle of the recirculation + 1.  Input and output stages are L for B-phase stages.
-// These additional optional parameters exist to support it:
-//   b_latch:           1 for a SELF stage that is recirculating across a  B-latch (0 default).
-//   a_latch:           1 for a SELF stage that is recirculating across an A-latch (0 default).
-// Internals:
-//   pre_latch_phase:             'L' for A-latch stage.
-//   post_latch_phase:            'L' for B-latch stage.
-\TLV bp_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, #_b_latch, #_a_latch)
-   m4_pushdef(['m4_b_latch'],   m4_ifelse(#_b_latch, 1, 1, 0))
-   m4_pushdef(['m4_a_latch'],   m4_ifelse(#_a_latch, 1, 1, 0))
-   m4_pushdef(['m4_pre_latch_phase'],  m4_ifelse(m4_a_latch, 1, L,))
-   m4_pushdef(['m4_post_latch_phase'], m4_ifelse(m4_b_latch, 1, L,))
-   |_out_pipe
-      @m4_stage_eval(@_out_stage - m4_b_latch - 1)['']m4_post_latch_phase
-         $trans_avail = (>>1$trans_avail && >>1$blocked) ||  // Recirc'ed or
-                        // Above is recomputation of $recirc to avoid a flop.
-                        // For SELF, its in the same stage, and is redundant computation.
-                        /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage - 1)$trans_avail; // Incoming available
-         //$first_avail = $trans_avail && ! >>1$blocked;  // Transaction is newly available.
-      @m4_stage_eval(@_out_stage - 1)m4_pre_latch_phase
-         ?$trans_avail  // Physically, $first_avail && *reset_b for functional gating in
-                        // place of recirculation.
-            $ANY =
-               >>1$recirc ? >>1$ANY
-                          : /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage - 1)$ANY;
-      @m4_stage_eval(@_out_stage - m4_b_latch)['']m4_post_latch_phase
-         $recirc = $trans_avail && $blocked;  // Available transaction that is blocked; must recirc.
-         // A valid for external transaction processing.
-         $trans_valid = $trans_avail && ! $blocked;
-         `BOGUS_USE($trans_valid)
-   |_in_pipe
-      @m4_stage_eval(@_in_stage - m4_b_latch)['']m4_post_latch_phase
-         $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;
-              // This trans is blocked (whether valid or not) if the next stage is recirculating.
-   
-
-
 // A backpressured pipeline.
 // m4_bp_pipeline(name, input_stage, output_stage[, indentation_str])
 //
@@ -1044,5 +962,89 @@ m4_popdef(['m4_pred_sigs'])
            $_reset
               ? m4_eval(#_MAX_BIT + 1)'d['']#_MAX_CREDIT
               : ($_Credit + ($_incr ? m4_eval(#_MAX_BIT + 1)'d1 : '1));
+
+
+
+
+// A backpressured flop stage.
+// m4_bp_stage(top, in_pipe, in_stage, out_pipe, out_stage[, indentation_str, b_latch, a_latch])
+//
+// Parameters:
+//   top:             eg: 'top'
+//   in/out_pipe/stage: As below.
+//   indentation_str:   eg: '   ' to provide 1 additional level of indentation
+//
+// This creates backpressure and recirculation for a transaction going from in_pipe to out_pipe.
+//
+// |in_pipe
+//   @in_stage|\  +--+
+//      ------| | |  |  |out_pipe@out_stage
+//            | |-|  |-+----
+//         +--| | |/\| |
+//         |  |/  +--+ |
+//         |           |
+//         +-----------+
+//
+// Input interface:
+//   |in_pipe
+//      @in_stage  (minus a phase for SELF)
+//         $trans_avail   // A transaction is available for consumption.
+//         ?$trans_valid = $trans_avail && ! $blocked
+//            $ANY        // input transaction
+//   |out_pipe
+//      @out_stage
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output signals:
+//   |in_pipe
+//      @in_stage
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |out_pipe
+//      @out_stage
+//         $trans_avail   // A transaction is available for consumption.
+//                        // (Actually, @out_stage-1, but expect consumption in @out_stage.)
+//         ?($trans_avail && ! $blocked)
+//            $ANY        // Output transaction
+//
+// This macro also supports SELF (Synchronous ELastic Flow) pipelines that are latch-based pipelines
+// with backpressure at every phase.
+// In this case, the input stage is the cycle feeding the recirculation, and the output stage is
+// the cycle of the recirculation + 1.  Input and output stages are L for B-phase stages.
+// These additional optional parameters exist to support it:
+//   b_latch:           1 for a SELF stage that is recirculating across a  B-latch (0 default).
+//   a_latch:           1 for a SELF stage that is recirculating across an A-latch (0 default).
+// Internals:
+//   pre_latch_phase:             'L' for A-latch stage.
+//   post_latch_phase:            'L' for B-latch stage.
+\TLV bp_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, #_b_latch, #_a_latch)
+   m4_pushdef(['m4_b_latch'],   m4_ifelse(#_b_latch, 1, 1, 0))
+   m4_pushdef(['m4_a_latch'],   m4_ifelse(#_a_latch, 1, 1, 0))
+   m4_pushdef(['m4_pre_latch_phase'],  m4_ifelse(m4_a_latch, 1, L,))
+   m4_pushdef(['m4_post_latch_phase'], m4_ifelse(m4_b_latch, 1, L,))
+   |_out_pipe
+      @m4_stage_eval(@_out_stage - m4_b_latch - 1)['']m4_post_latch_phase
+         $trans_avail = (>>1$trans_avail && >>1$blocked) ||  // Recirc'ed or
+                        // Above is recomputation of $recirc to avoid a flop.
+                        // For SELF, its in the same stage, and is redundant computation.
+                        /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage - 1)$trans_avail; // Incoming available
+         //$first_avail = $trans_avail && ! >>1$blocked;  // Transaction is newly available.
+      @m4_stage_eval(@_out_stage - 1)m4_pre_latch_phase
+         ?$trans_avail  // Physically, $first_avail && *reset_b for functional gating in
+                        // place of recirculation.
+            $ANY =
+               >>1$recirc ? >>1$ANY
+                          : /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage - 1)$ANY;
+      @m4_stage_eval(@_out_stage - m4_b_latch)['']m4_post_latch_phase
+         $recirc = $trans_avail && $blocked;  // Available transaction that is blocked; must recirc.
+         // A valid for external transaction processing.
+         $trans_valid = $trans_avail && ! $blocked;
+         `BOGUS_USE($trans_valid)
+   |_in_pipe
+      @m4_stage_eval(@_in_stage - m4_b_latch)['']m4_post_latch_phase
+         $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;
+              // This trans is blocked (whether valid or not) if the next stage is recirculating.
+   
+
 
 
