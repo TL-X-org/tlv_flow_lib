@@ -771,113 +771,6 @@ m4_popdef(['m4_trans_ind'])
 
 
 
-// A simple ring.
-//
-// One transaction per cycle, which yields to the transaction on the ring.
-//
-// m4_simple_ring(hop, in_pipe, in_stage, out_pipe, out_stage, reset_scope, reset_stage, reset_sig)
-//   hop:                   The name of the beh hier for a ring hop/stop.
-//   [in/out]_[pipe/stage]: The pipeline name and stage of the input and output for the control logic
-//                          in each hop.
-//   reset_[scope/stage/sig]: The fully qualified reset signal and stage.
-//
-// Input interface:
-//   /hop[*]
-//      |in_pipe
-//         @in_stage
-//            $trans_avail   // A transaction is available for consumption.
-//         @in_stage
-//            ?trans_valid = $trans_avail && ! $blocked
-//               $dest       // Destination hop
-//         @(in_stage+1)
-//            ?trans_valid
-//               $ANY        // Input transaction
-//   /hop[*]
-//      |out_pipe
-//         @out_stage
-//            $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                           // and will recirculate.
-// Output interface:
-//   /hop[*]
-//      |in_pipe
-//         @in_stage
-//            $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                           // and must recirculate.
-//      |out_pipe
-//         @out_stage
-//            $trans_avail   // A transaction is available for consumption.
-//         @(out_stage+1)
-//            ?trans_valid = $trans_avail && ! $blocked
-//               $ANY        // Output transaction
-
-
-m4_define_plus(['m4_simple_ring'], ['
-
-m4_pushdef(['m4_hop'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_at'],     ['$7'])
-m4_pushdef(['m4_out_pipe'],  ['$8'])
-m4_pushdef(['m4_out_at'],    ['$9'])
-m4_pushdef(['m4_reset_scope'],['$10'])
-m4_pushdef(['m4_reset_at'],  ['$11'])
-m4_pushdef(['m4_reset_sig'], ['$12'])
-
-m4_pushdef(['m4_out_in_align'], m4_align(m4_out_at, m4_in_at))
-m4_pushdef(['m4_in_out_align'], m4_align(m4_in_at, m4_out_at))
-
-'], m4___file__, m4___line__, ['
-
-   // Logic
-   /m4_hop[*]
-      |default
-         @0
-            \SV_plus
-               int prev_hop = (m4_hop + RING_STOPS - 1) % RING_STOPS;
-      |m4_in_pipe
-         @m4_in_at
-            $blocked = /m4_hop|rg<>0$passed_on;
-      |rg
-         @m4_in_at
-            $passed_on = /m4_hop[prev_hop]|rg>>1$pass_on;
-            $valid = ! m4_reset_scope>>m4_align(m4_reset_at, m4_in_at)m4_reset_sig &&
-                     ($passed_on || /m4_hop|m4_in_pipe<>0$trans_avail);
-            $pass_on = $valid && ! /m4_hop|m4_out_pipe>>m4_out_in_align$trans_valid;
-            $dest[RING_STOPS_WIDTH-1:0] =
-               $passed_on
-                  ? /m4_hop[prev_hop]|rg>>1$dest
-                  : /m4_hop|m4_in_pipe<>0$dest;
-         @m4_eval(m4_in_at + 1)
-            ?$valid
-               $ANY =
-                  $passed_on
-                     ? /m4_hop[prev_hop]|rg>>1$ANY
-                     : /m4_hop|m4_in_pipe<>0$ANY;
-      |m4_out_pipe
-         // Ring out
-         @m4_out_at
-            $trans_avail = /m4_hop|rg>>m4_in_out_align$valid && (/m4_hop|rg>>m4_in_out_align$dest == m4_hop);
-            $blocked = 1'b0;
-            $trans_valid = $trans_avail && ! $blocked;
-         ?$trans_valid
-            @1
-               $ANY = /m4_hop|rg>>m4_in_out_align$ANY;
-'],
-
-['
-m4_popdef(['m4_hop'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_at'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_at'])
-m4_popdef(['m4_reset_scope'])
-m4_popdef(['m4_reset_at'])
-m4_popdef(['m4_reset_sig'])
-
-m4_popdef(['m4_out_in_align'])
-m4_popdef(['m4_in_out_align'])
-'])
-
-
 
 
 '])m4_dnl
@@ -1028,4 +921,84 @@ m4_popdef(['m4_in_out_align'])
                $ANY = $delayed ? /_top|_in_pipe/trans>>1$ANY : /_top|_in_pipe/pred_trans<>0$ANY;
          @_comp_stage
             $valid = (/_top|_in_pipe<>0$valid && ! /_top|_in_pipe/comp<>0$mispred) || $delayed;
+
+
+// A simple ring.
+//
+// One transaction per cycle, which yields to the transaction on the ring.
+//
+// m4_simple_ring(hop, in_pipe, in_stage, out_pipe, out_stage, reset_scope, reset_stage, reset_sig)
+//   hop:                   The name of the beh hier for a ring hop/stop.
+//   [in/out]_[pipe/stage]: The pipeline name and stage of the input and output for the control logic
+//                          in each hop.
+//   reset_[scope/stage/sig]: The fully qualified reset signal and stage.
+//
+// Input interface:
+//   /hop[*]
+//      |in_pipe
+//         @in_stage
+//            $trans_avail   // A transaction is available for consumption.
+//         @in_stage
+//            ?trans_valid = $trans_avail && ! $blocked
+//               $dest       // Destination hop
+//         @(in_stage+1)
+//            ?trans_valid
+//               $ANY        // Input transaction
+//   /hop[*]
+//      |out_pipe
+//         @out_stage
+//            $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                           // and will recirculate.
+// Output interface:
+//   /hop[*]
+//      |in_pipe
+//         @in_stage
+//            $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                           // and must recirculate.
+//      |out_pipe
+//         @out_stage
+//            $trans_avail   // A transaction is available for consumption.
+//         @(out_stage+1)
+//            ?trans_valid = $trans_avail && ! $blocked
+//               $ANY        // Output transaction
+
+
+
+\TLV simple_ring(/_hop,|_in_pipe,@_in_at,|_out_pipe,@_out_at,/_reset_scope,@_reset_at,$_reset_sig)
+   m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
+   m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
+   // Logic
+   /_hop[*]
+      |default
+         @0
+            \SV_plus
+            int prev_hop = (m4_strip_prefix(/_hop) + RING_STOPS - 1) % RING_STOPS;
+      |_in_pipe
+         @_in_at
+            $blocked = /_hop|rg<>0$passed_on;
+      |rg
+         @_in_at
+            $passed_on = /_hop[prev_hop]|rg>>1$pass_on;
+            $valid = ! /_reset_scope>>m4_align(@_reset_at, @_in_at)$_reset_sig &&
+                     ($passed_on || /_hop|_in_pipe<>0$trans_avail);
+            $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
+            $dest[RING_STOPS_WIDTH-1:0] =
+               $passed_on
+                  ? /_hop[prev_hop]|rg>>1$dest
+                  : /_hop|_in_pipe<>0$dest;
+         @m4_stage_eval(@_in_at + 1)
+            ?$valid
+               $ANY =
+                  $passed_on
+                     ? /_hop[prev_hop]|rg>>1$ANY
+                     : /_hop|_in_pipe<>0$ANY;
+      |_out_pipe
+         // Ring out
+         @_out_at
+            $trans_avail = /_hop|rg>>m4_in_out_align$valid && (/_hop|rg>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
+            $blocked = 1'b0;
+            $trans_valid = $trans_avail && ! $blocked;
+         ?$trans_valid
+            @1
+               $ANY = /_hop|rg>>m4_in_out_align$ANY;
 
