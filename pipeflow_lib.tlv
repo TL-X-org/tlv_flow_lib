@@ -879,77 +879,6 @@ m4_popdef(['m4_in_out_align'])
 
 
 
-// A one-cycle speculation flow.
-// m4+1cyc_speculate(m4_top, m4_in_pipe, m4_out_pipe, m4_spec_stage, m4_comp_stage, m4_pred_sigs)
-// Eg:
-//    m4+1cyc_speculate(top, in_pipe, out_pipe, 0, 1, ['$taken, $target'])
-// Inputs:
-//    |m4_in_pipe
-//       @m4_pred_stage (or earlier)
-//          /trans
-//             $result1   // Correct result(s)
-//             $result2
-//          /pred_trans
-//             $result1   // Predicted result(s)
-// Outputs:
-//    |m4_out_pipe
-//       /trans
-//          @m4_spec_stage
-//             $result1
-//             $result2
-//          @m4_comp_stage
-//             $valid
-//
-
-m4_define_plus(['m4_1cyc_speculate'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_out_pipe'],  ['$7'])
-m4_pushdef(['m4_spec_stage'],['$8'])  // Stage in which speculation is done.
-m4_pushdef(['m4_comp_stage'],['$9'])  // Stage in which comparison is performed.
-m4_pushdef(['m4_pred_sigs'], ['$10']) // Comma-separated list of predicted signals.
-
-'], m4___file__, m4___line__, ['
-   |m4_in_pipe
-      ?$valid
-         @m4_spec_stage
-            /trans  // Context for non-speculative calculation.
-            /pred_trans  // Context for prediction (speculative transaction).
-               $ANY = |m4_in_pipe/trans$ANY;  // Pass through real calculation by default.
-         @m4_comp_stage
-            /comp
-               // Pull speculative signals and actual ones for comparison to
-               // determine mispredict.
-               $ANY = |m4_in_pipe/trans$ANY ^ |m4_in_pipe/pred_trans$ANY;
-               $mispred = | {m4_pred_sigs};
-      @m4_comp_stage
-         // Unconditioned signal indicating need to delay 1 cycle.
-         $delay = $valid && (
-                       /comp$mispred ||  // misprediction
-                       >>1$delay         // previous was delayed
-                    );
-   |m4_out_pipe
-      /trans
-         @m4_spec_stage
-            // Context for transaction post-speculation, timed to correct speculation.
-            $delayed = /m4_top|m4_in_pipe>>1$delay;
-            // Use $maybe_valid as a condition if there isn't time to use $valid.
-            $maybe_valid = /m4_top|m4_in_pipe<>0$valid || $delayed;
-            ?$maybe_valid
-               $ANY = $delayed ? /m4_top|m4_in_pipe/trans>>1$ANY : /m4_top|m4_in_pipe/pred_trans<>0$ANY;
-         @m4_comp_stage
-            $valid = (/m4_top|m4_in_pipe<>0$valid && ! /m4_top|m4_in_pipe/comp<>0$mispred) || $delayed;
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_comp_stage'])
-m4_popdef(['m4_pred_sigs'])
-'])
-
-
 
 '])m4_dnl
 // Credit counter.
@@ -1047,4 +976,56 @@ m4_popdef(['m4_pred_sigs'])
    
 
 
+// A one-cycle speculation flow.
+// m4+1cyc_speculate(m4_top, m4_in_pipe, m4_out_pipe, m4_spec_stage, m4_comp_stage, m4_pred_sigs)
+// Eg:
+//    m4+1cyc_speculate(top, in_pipe, out_pipe, 0, 1, ['$taken, $target'])
+// Inputs:
+//    |m4_in_pipe
+//       @m4_pred_stage (or earlier)
+//          /trans
+//             $result1   // Correct result(s)
+//             $result2
+//          /pred_trans
+//             $result1   // Predicted result(s)
+// Outputs:
+//    |m4_out_pipe
+//       /trans
+//          @m4_spec_stage
+//             $result1
+//             $result2
+//          @m4_comp_stage
+//             $valid
+//
+
+\TLV 1cyc_speculate(/_top,|_in_pipe,|_out_pipe,@_spec_stage,@_comp_stage,$_pred_sigs)
+   |_in_pipe
+      ?$valid
+         @_spec_stage
+            /trans  // Context for non-speculative calculation.
+            /pred_trans  // Context for prediction (speculative transaction).
+               $ANY = |_in_pipe/trans$ANY;  // Pass through real calculation by default.
+         @_comp_stage
+            /comp
+               // Pull speculative signals and actual ones for comparison to
+               // determine mispredict.
+               $ANY = |_in_pipe/trans$ANY ^ |_in_pipe/pred_trans$ANY;
+               $mispred = | {$_pred_sigs};
+      @_comp_stage
+         // Unconditioned signal indicating need to delay 1 cycle.
+         $delay = $valid && (
+                       /comp$mispred ||  // misprediction
+                       >>1$delay         // previous was delayed
+                    );
+   |_out_pipe
+      /trans
+         @_spec_stage
+            // Context for transaction post-speculation, timed to correct speculation.
+            $delayed = /_top|_in_pipe>>1$delay;
+            // Use $maybe_valid as a condition if there isn't time to use $valid.
+            $maybe_valid = /_top|_in_pipe<>0$valid || $delayed;
+            ?$maybe_valid
+               $ANY = $delayed ? /_top|_in_pipe/trans>>1$ANY : /_top|_in_pipe/pred_trans<>0$ANY;
+         @_comp_stage
+            $valid = (/_top|_in_pipe<>0$valid && ! /_top|_in_pipe/comp<>0$mispred) || $delayed;
 
