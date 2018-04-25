@@ -225,171 +225,6 @@ m4_popdef(['m4_out_stage'])
 
 
 
-// A FIFO with virtual channels.
-// VC copies of m4+flop_fifo, which drain based on a priority assigned to each VC.
-// Data should arrive early in |in_pipe@in_stage, or in the stage prior.  It can be
-// available on the output early in |out_pipe@out_stage or late the cycle before,
-// determined by bypass_at.
-// The FIFOs feed into a speculative pre-selected flit.  The
-// pre-selected flit remains in the corresponding m4+flop_fifo until it is accepted
-// externally, so the selection is non-blocking.  The pre-selected flit will be
-// bumped by a higher-priority flit (but not an equal priority flit).
-//
-// Parameters begin as with m4_flop_fifo:
-// m4+vc_flop_fifo_v2(top, in_pipe, in_at, out_pipe, out_at, depth, trans_hier, vc_range, prio_range [, bypass_at [, high_water]])
-
-// Input interface:
-//    |in_pipe
-//       @in_stage  // (or cycle prior if bypass_stage requires it)
-//          $reset         // A reset signal.
-//          ?$trans_valid  // (| /vc[*]$vc_trans_valid)
-//             $ANY        // Input transaction (under trans_hier if non-empty)
-//    /vc[*]
-//       |in_pipe
-//          @in_stage
-//             $vc_trans_valid
-//       |out_pipe
-//          @out_stage-1
-//             $has_credit    // Credit is available for this VC (or by other means, it is okay to output this VC).
-//             $Prio  // (config) the prio of each VC
-// Output interface:
-//   /vc[*]
-//      |in_pipe
-//         @in_stage
-//            $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                           // and must recirculate.
-//      |out_pipe
-//         @bypass_stage
-//            $vc_trans_valid// An indication of the outbound $vc (or use /top|out_pipe$trans_valid &&
-//                                                                        /top|out_pipe/trans_hier$vc).
-//   |out_pipe
-//      @bypass_stage
-//         $trans_valid
-//         ?$trans_valid
-//            $ANY        // Output transaction (under trans_hier if given)
-
-// Backpressure ($blocked, $full, $ValidCount) signals are per /vc; $trans_valid is a singleton
-// for input and output and must consider per-VC backpressure; $trans_avail is not produced on
-// output and should not be assigned externally for input.
-//
-m4_unsupported(['m4_vc_flop_fifo'], 1)
-m4_define_plus(['m4_vc_flop_fifo_v2'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_at'],     ['$7'])
-m4_pushdef(['m4_out_pipe'],  ['$8'])
-m4_pushdef(['m4_out_at'],    ['$9'])
-m4_pushdef(['m4_depth'],     ['$10'])
-m4_pushdef(['m4_trans_hier'],['$11'])
-m4_pushdef(['m4_vc_range'],  ['$12'])
-m4_pushdef(['m4_prio_range'],['$13'])
-m4_pushdef(['m4_bypass_at'], ['$14'])   // By default, m4_out_at, or can be the cycle before, in which case inputs and outputs are in the previous cycle.
-m4_pushdef(['m4_high_water'],['$15'])
-
-m4_define(['m4_bypass_at'], m4_ifelse(m4_bypass_at, [''], ['m4_out_at'], ['m4_bypass_at']))
-m4_pushdef(['m4_arb_at'], m4_eval(m4_out_at - 1))  // Arb and read VC FIFOs the stage before m4_out_at.
-m4_pushdef(['m4_bypass_align'], m4_align(m4_out_at, m4_in_at))
-m4_pushdef(['m4_reverse_bypass_align'], m4_align(m4_in_at, m4_out_at))
-m4_pushdef(['m4_trans_ind'], m4_ifelse(m4_trans_hier, [''], [''], ['   ']))
-
-'], m4___file__, m4___line__, ['
-   /vc[m4_vc_range]
-      |m4_in_pipe
-         @m4_in_at
-            // Apply inputs to the right VC FIFO.
-            //
-
-            $reset = /m4_top|m4_in_pipe$reset;
-            $trans_valid = $vc_trans_valid && ! /vc|m4_out_pipe>>m4_bypass_align$bypassed_fifos_for_this_vc;
-            $trans_avail = $trans_valid;
-            ?$trans_valid
-               m4_trans_hier
-m4_trans_ind               $ANY = /m4_top|m4_in_pipe['']m4_trans_hier$ANY;
-      // Instantiate FIFO.  Output to stage (m4_out_at - 1) because bypass is m4_out_at.
-      m4_flop_fifo_v2(['      $1'], ']m4___file__[', ']m4___line__[', ['m4_['']flop_fifo_v2(...)'], vc, m4_in_pipe, m4_in_at, m4_out_pipe, m4_arb_at, m4_depth, m4_trans_hier, m4_high_water)
-
-   // FIFO select.
-   //
-   /vc[*]
-      |m4_out_pipe
-         @m4_arb_at
-            $arbing = $trans_avail && $has_credit;
-            /prio[m4_prio_range]
-               // Decoded priority.
-               >>1$Match = #prio == |m4_out_pipe$Prio;
-            // Mask of same-prio VCs.
-            /other_vc[m4_vc_range]
-               >>1$SamePrio = |m4_out_pipe$Prio == /vc[#other_vc]|m4_out_pipe$Prio;
-               // Select among same-prio VCs.
-               $competing = $SamePrio && /vc[#other_vc]|m4_out_pipe$arbing;
-            // Select FIFO if selected within priority and this VC has the selected (max available) priority.
-            $fifo_sel = m4_am_max(/other_vc[*]$competing, vc) && | (/prio[*]$Match & /m4_top/prio[*]|m4_out_pipe$sel);
-               // TODO: Need to replace m4_am_max with round-robin within priority.
-            $blocked = ! $fifo_sel;
-         @m4_bypass_at
-            // Can bypass FIFOs?
-            $can_bypass_fifos_for_this_vc = /vc|m4_in_pipe>>m4_reverse_bypass_align$vc_trans_valid &&
-                                            /vc|m4_in_pipe>>m4_align(m4_eval(m4_in_at+1), m4_out_at)$empty &&
-                                            $has_credit;
-
-            // Indicate output VC as per-VC FIFO output $trans_valid or could bypass in this VC.
-            $bypassed_fifos_for_this_vc = $can_bypass_fifos_for_this_vc && ! /m4_top|m4_out_pipe$fifo_trans_avail;
-            $vc_trans_valid = $trans_valid || $bypassed_fifos_for_this_vc;
-            `BOGUS_USE($vc_trans_valid)  // okay to not consume this
-   /prio[m4_prio_range]
-      |m4_out_pipe
-         @m4_arb_at
-            /vc[m4_vc_range]
-               // Trans available for this prio/VC?
-               $avail_within_prio = /m4_top/vc|m4_out_pipe$trans_avail &&
-                                    /m4_top/vc|m4_out_pipe/prio$Match;
-            // Is this priority available in FIFOs.
-            $avail = | /vc[*]$avail_within_prio;
-            // Select this priority if its the max available.
-            $sel = m4_am_max(/prio[*]|m4_out_pipe$avail, prio);
-
-   |m4_out_pipe
-      @m4_arb_at
-         $fifo_trans_avail = | /m4_top/vc[*]|m4_out_pipe$arbing;
-         /fifos_out
-            $fifo_trans_avail = |m4_out_pipe$fifo_trans_avail;
-            /vc[m4_vc_range]
-            m4_select(['            $1'], ']m4___file__[', ']m4___line__[', ['m4_['']select(...)'], $ANY, /m4_top, /vc, |m4_out_pipe['']m4_trans_hier, |m4_out_pipe, $fifo_sel, $ANY, $fifo_trans_avail)
-
-         // Output transaction
-         //
-
-      @m4_bypass_at
-         // Incorporate bypass
-         // Bypass if there's no transaction from the FIFOs, and the incoming transaction is okay for output.
-         $can_bypass_fifos = | /m4_top/vc[*]|m4_out_pipe$can_bypass_fifos_for_this_vc;
-         $trans_valid = $fifo_trans_avail || $can_bypass_fifos;
-         ?$trans_valid
-            m4_trans_hier
-m4_trans_ind            $ANY = |m4_out_pipe$fifo_trans_avail ? |m4_out_pipe/fifos_out$ANY : /m4_top|m4_in_pipe['']m4_trans_hier>>m4_reverse_bypass_align$ANY;
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_at'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_at'])
-m4_popdef(['m4_depth'])
-m4_popdef(['m4_trans_hier'])
-m4_popdef(['m4_vc_range'])
-m4_popdef(['m4_prio_range'])
-m4_popdef(['m4_bypass_at'])
-m4_popdef(['m4_high_water'])
-
-m4_popdef(['m4_arb_at'])
-m4_popdef(['m4_bypass_align'])
-m4_popdef(['m4_reverse_bypass_align'])
-m4_popdef(['m4_trans_ind'])
-'])
-
-
-
 
 
 
@@ -1010,4 +845,139 @@ m4_unsupported(['m4_flop_fifo'], 1)
          ?$trans_valid
             @1
                $ANY = /_hop|rg>>m4_in_out_align$ANY;
+
+
+
+
+// A FIFO with virtual channels.
+// VC copies of m4+flop_fifo, which drain based on a priority assigned to each VC.
+// Data should arrive early in |in_pipe@in_stage, or in the stage prior.  It can be
+// available on the output early in |out_pipe@out_stage or late the cycle before,
+// determined by bypass_at.
+// The FIFOs feed into a speculative pre-selected flit.  The
+// pre-selected flit remains in the corresponding m4+flop_fifo until it is accepted
+// externally, so the selection is non-blocking.  The pre-selected flit will be
+// bumped by a higher-priority flit (but not an equal priority flit).
+//
+// Parameters begin as with m4_flop_fifo:
+// m4+vc_flop_fifo_v2(top, in_pipe, in_at, out_pipe, out_at, depth, trans_hier, vc_range, prio_range [, bypass_at [, high_water]])
+
+// Input interface:
+//    |in_pipe
+//       @in_stage  // (or cycle prior if bypass_stage requires it)
+//          $reset         // A reset signal.
+//          ?$trans_valid  // (| /vc[*]$vc_trans_valid)
+//             $ANY        // Input transaction (under trans_hier if non-empty)
+//    /vc[*]
+//       |in_pipe
+//          @in_stage
+//             $vc_trans_valid
+//       |out_pipe
+//          @out_stage-1
+//             $has_credit    // Credit is available for this VC (or by other means, it is okay to output this VC).
+//             $Prio  // (config) the prio of each VC
+// Output interface:
+//   /vc[*]
+//      |in_pipe
+//         @in_stage
+//            $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                           // and must recirculate.
+//      |out_pipe
+//         @bypass_stage
+//            $vc_trans_valid// An indication of the outbound $vc (or use /top|out_pipe$trans_valid &&
+//                                                                        /top|out_pipe/trans_hier$vc).
+//   |out_pipe
+//      @bypass_stage
+//         $trans_valid
+//         ?$trans_valid
+//            $ANY        // Output transaction (under trans_hier if given)
+
+// Backpressure ($blocked, $full, $ValidCount) signals are per /vc; $trans_valid is a singleton
+// for input and output and must consider per-VC backpressure; $trans_avail is not produced on
+// output and should not be assigned externally for input.
+//
+
+
+
+ m4_unsupported(['m4_vc_flop_fifo'], 1)
+\TLV vc_flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_vc_range,#_prio_range,@_bypass_at,#_high_water)
+
+   m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at, [''], ['@_out_at'], ['@_bypass_at']))
+   m4_pushdef(['m4_arb_at'], m4_eval(@_out_at - 1))  // Arb and read VC FIFOs the stage before m4_out_at.
+   m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
+   m4_pushdef(['m4_reverse_bypass_align'], m4_align(@_in_at, @_out_at))
+   m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans_hier, [''], [''], ['   ']))
+   /vc[#_vc_range]
+      |_in_pipe
+         @_in_at
+            // Apply inputs to the right VC FIFO.
+            //
+            $reset = /_top|_in_pipe$reset;
+            $trans_valid = $vc_trans_valid && ! /vc|_out_pipe>>m4_bypass_align$bypassed_fifos_for_this_vc;
+            $trans_avail = $trans_valid;
+            ?$trans_valid
+               /_trans_hier
+ m4_trans_ind              $ANY = /_top|_in_pipe['']/_trans_hier$ANY;
+      // Instantiate FIFO.  Output to stage (m4_out_at - 1) because bypass is m4_out_at.
+      m4_flop_fifo_v2( |_in_pipe, @_in_at, |_out_pipe, @_arb_at, #_depth, /_trans_hier, #_high_water)
+
+   // FIFO select.
+   //
+   /vc[*]
+      |_out_pipe
+         @_arb_at
+            $arbing = $trans_avail && $has_credit;
+            /prio[#_prio_range]
+               // Decoded priority.
+               >>1$Match = #prio == |m4_out_pipe$Prio;
+            // Mask of same-prio VCs.
+            /other_vc[#_vc_range]
+               >>1$SamePrio = |_out_pipe$Prio == /vc[#other_vc]|_out_pipe$Prio;
+               // Select among same-prio VCs.
+               $competing = $SamePrio && /vc[#other_vc]|_out_pipe$arbing;
+            // Select FIFO if selected within priority and this VC has the selected (max available) priority.
+            $fifo_sel = m4_am_max(/other_vc[*]$competing, vc) && | (/prio[*]$Match & /_top/prio[*]|_out_pipe$sel);
+               // TODO: Need to replace m4_am_max with round-robin within priority.
+            $blocked = ! $fifo_sel;
+         @_bypass_at
+            // Can bypass FIFOs?
+            $can_bypass_fifos_for_this_vc = /vc|_in_pipe>>m4_reverse_bypass_align$vc_trans_valid &&
+                                            /vc|_in_pipe>>m4_align(m4_eval(@_in_at+1), @_out_at)$empty &&
+                                            $has_credit;
+
+            // Indicate output VC as per-VC FIFO output $trans_valid or could bypass in this VC.
+            $bypassed_fifos_for_this_vc = $can_bypass_fifos_for_this_vc && ! /_top|_out_pipe$fifo_trans_avail;
+            $vc_trans_valid = $trans_valid || $bypassed_fifos_for_this_vc;
+            `BOGUS_USE($vc_trans_valid)  // okay to not consume this
+   /prio[#_prio_range]
+      |_out_pipe
+         @_arb_at
+            /vc[#_vc_range]
+               // Trans available for this prio/VC?
+               $avail_within_prio = /_top/vc|_out_pipe$trans_avail &&
+                                    /_top/vc|_out_pipe/prio$Match;
+            // Is this priority available in FIFOs.
+            $avail = | /vc[*]$avail_within_prio;
+            // Select this priority if its the max available.
+            $sel = m4_am_max(/prio[*]|_out_pipe$avail, prio);
+
+   |_out_pipe
+      @_arb_at
+         $fifo_trans_avail = | /_top/vc[*]|_out_pipe$arbing;
+         /fifos_out
+            $fifo_trans_avail = |_out_pipe$fifo_trans_avail;
+            /vc[#_vc_range]
+            m4_select( $ANY, /_top, /vc, |_out_pipe['']/_trans_hier, |_out_pipe, $fifo_sel, $ANY, $fifo_trans_avail)
+
+         // Output transaction
+         //
+
+      @_bypass_at
+         // Incorporate bypass
+         // Bypass if there's no transaction from the FIFOs, and the incoming transaction is okay for output.
+         $can_bypass_fifos = | /_top/vc[*]|_out_pipe$can_bypass_fifos_for_this_vc;
+         $trans_valid = $fifo_trans_avail || $can_bypass_fifos;
+         ?$trans_valid
+            /_trans_hier
+ m4_trans_ind           $ANY = |_out_pipe$fifo_trans_avail ? |_out_pipe/fifos_out$ANY : /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY;
 
