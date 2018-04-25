@@ -39,45 +39,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
 
-// A backpressured pipeline.
-// m4_bp_pipeline(name, input_stage, output_stage[, indentation_str])
-//
-// This creates recirculation between input_stage and output_stage
-//   ((output_stage - input_stage - 1) recirculations).  Each stage from (input_stage + 1)
-//   to output_stage is a pipeline for transactions from a recirculation mux in @0
-//   (soon to be clock gating with a @0 enable), where transaction logic is intended for @1.
-//   If there is any unoccupied stage, all prior stages will progress.
-//   So backpressure on |name['']output_stage@0$blocked is immediately visible on
-//   |name['']input_stage@0$blocked if all stages are occupied.  |name['']output_stage$blocked
-//   should be available early enough in @0, and |name['']input_stage$blocked should
-//   generally be consumed in @1.
-//
-// Transaction functionality should be placed in:
-//   |name['']input_stage through |name['']output_stage @1.
-//
-// Input interface:
-//   |name['']input_stage
-//      @1
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
-//            $ANY        // input transaction.
-//   |name['']output_stage
-//      @1
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output signals:
-//   |name['']input_stage
-//      @1
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |name['']output_stage
-//      @1
-//         $trans_avail   // A transaction is available for consumption.
-\TLV bp_pipeline(|_name, @_input_stage, @_output_stage)
-   m4_forloop(['m4_stage'], m4_incr(@_input_stage), @_output_stage, ['
-   m4+bp_stage(/top, ']|_name['['']m4_decr(m4_stage), 1, ']|_name['['']m4_stage, 1)
-   '])
-
 
 
 // ==========================================================
@@ -645,6 +606,46 @@ m4_popdef(['m4_trans_ind'])
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;
               // This trans is blocked (whether valid or not) if the next stage is recirculating.
    
+// A backpressured pipeline.
+// m4_bp_pipeline(name, input_stage, output_stage[, indentation_str])
+//
+// This creates recirculation between input_stage and output_stage
+//   ((output_stage - input_stage - 1) recirculations).  Each stage from (input_stage + 1)
+//   to output_stage is a pipeline for transactions from a recirculation mux in @0
+//   (soon to be clock gating with a @0 enable), where transaction logic is intended for @1.
+//   If there is any unoccupied stage, all prior stages will progress.
+//   So backpressure on |name['']output_stage@0$blocked is immediately visible on
+//   |name['']input_stage@0$blocked if all stages are occupied.  |name['']output_stage$blocked
+//   should be available early enough in @0, and |name['']input_stage$blocked should
+//   generally be consumed in @1.
+//
+// Transaction functionality should be placed in:
+//   |name['']input_stage through |name['']output_stage @1.
+//
+// Input interface:
+//   |name['']input_stage
+//      @1
+//         $trans_avail   // A transaction is available for consumption.
+//         ?trans_valid = $trans_avail && ! $blocked
+//            $ANY        // input transaction.
+//   |name['']output_stage
+//      @1
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output signals:
+//   |name['']input_stage
+//      @1
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |name['']output_stage
+//      @1
+//         $trans_avail   // A transaction is available for consumption.
+\TLV bp_pipeline(|_name, @_input_stage, @_output_stage)
+   m4_forloop(['m4_stage'], m4_incr(@_input_stage), @_output_stage, ['
+   m4+bp_stage(/top, ']|_name['['']m4_decr(m4_stage), 1, ']|_name['['']m4_stage, 1)
+   '])
+
+
 // A simple flop-based FIFO with entry-granular clock gating.
 // Note: Simulation is less efficient due to the explicit clock gating.
 //
