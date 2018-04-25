@@ -41,65 +41,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-// ==========================================================
-//
-// Stall Pipeline
-//
-
-// One cycle of a stall pipeline.
-// m4_stall_stage(top, in_pipe, in_stage, mid_pipe, mid_stage, out_pipe, out_stage[, indentation_str])
-//   top:                   eg: 'top'
-//   in/mid/out_pipe/stage: The pipeline name and stage number of the input (A-phase) stage
-//                          and the output stage.
-//   indentation_str:       eg: '   ' to provide 1 additional level of indentation
-//
-// This creates recirculation for a transaction going from in_pipe to out_pipe,
-// where in_pipe/stage is one cycle from out_pipe/stage without backpressure.
-//
-// Currently, this uses recirculation, but it is intended to be modified to use flop enables
-// to hold the transactions.
-//
-// Input interface:
-//   |in_pipe
-//      @in_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
-//            /trans
-//               $ANY     // input transaction
-//   |out_pipe
-//      @out_stage
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output signals:
-//   |in_pipe
-//      @in_stage
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |out_pipe
-//      @out_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid   // $trans_avail && ! $blocked
-//            /trans
-//               $ANY     // Output transaction
-//
-\TLV stall_stage(/_top,|_in_pipe,@_in_stage,|_out_pipe,@_out_stage)
-   |_in_pipe
-      @_in_stage
-         $blocked = /_top|_out_pipe<>0$blocked;
-   |_out_pipe
-      @_out_stage
-         $trans_avail = $blocked ? >>1$trans_avail : /_top|_in_pipe>>1$trans_avail;
-         $trans_valid = $trans_avail && !$blocked;
-         ?$trans_valid
-            /trans_hold
-               $ANY = |_out_pipe$blocked ? >>1$ANY : /_top|_in_pipe/trans>>1$ANY;
-         ?$trans_avail
-            /trans
-               $ANY = |_out_pipe/trans_hold$ANY;
-
-
-
-
 // A Stall Pipeline.
 // m4_stall_pipeline(top, name, first_cycle, last_cycle)
 //
@@ -281,63 +222,6 @@ m4_popdef(['m4_out_stage'])
 '])
 
 
-
-
-
-
-
-// A FIFO using simple_bypass_fifo.
-// Requires include "simple_bypass_fifo.sv".
-//
-// The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
-//
-\TLV m4_old_simple_bypass_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,#_width,/_trans_hier,#_high_water)
-   |_in_pipe
-      @_in_at
-         $out_blocked = /_top|_out_pipe>>m4_align(@_out_at, @_in_at)$blocked;
-         $blocked = (/_top/fifo>>m4_align(0, @_in_at)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, ['#_high_water']))) && $out_blocked;
-   /fifo
-      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
-         fifo(.clk(clk), .reset(/_top|m4_in_pipe>>m4_align(@_in_at, 0)$reset),
-              .push(/_top|_in_pipe>>m4_align(@_in_at, 0)$trans_valid),
-              .data_in(/_top|_in_pipe['']/_trans_hier>>m4_align(@_in_at, 0)$ANY),
-              .pop(/_top|_out_pipe>>m4_align(@_out_at, 0)$trans_valid),
-              .data_out(/_top|_out_pipe['']/_trans_hier>>m4_align(@_out_at, 0)$$ANY),
-              .cnt($$cnt[2:0]));
-   |_out_pipe
-      @_out_at
-         $trans_avail = /_top/fifo>>m4_align(0, @_out_at)$cnt != 3'b0 || /_top|_in_pipe>>m4_align(@_in_at, @m4_out_at)$trans_avail;
-         $trans_valid = $trans_avail && !$blocked;
-
-
-
-
-// A FIFO using simple_bypass_fifo.
-// Requires include "simple_bypass_fifo.sv".
-//
-// The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
-//
-// Args:
-//   /_top, |_in, @_in, |_out, @_out, #_depth, #_width: as one would expect.
-//   /_trans: hierarchy for transaction, eg: ['/flit'] or ['']
-//   #_high_water: Default to 0.  Number of additional entries beyond full.
-\TLV simple_bypass_fifo_v2(/_top, |_in, @_in, |_out, @_out, #_depth, #_width, /_trans, #_high_water)
-   |_in
-      @_in
-         $out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
-         $blocked = (/_top/fifo>>m4_align(0, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
-   /fifo
-      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
-         fifo(.clk(clk), .reset(/_top|_in>>m4_align(@_in, 0)$reset),
-              .push(/_top|_in>>m4_align(@_in, 0)$trans_valid),
-              .data_in(/_top|_in/_trans>>m4_align(@_in, 0)$ANY),
-              .pop(/_top|_out>>m4_align(@_out, 0)$trans_valid),
-              .data_out(/_top|_out/_trans>>m4_align(@_out, 0)$$ANY),
-              .cnt($$cnt[2:0]));
-   |_out
-      @_out
-         $trans_avail = /_top/fifo>>m4_align(0, @_out)$cnt != 3'b0 || /_top|_in>>m4_align(@_in, @_out)$trans_avail;
-         $trans_valid = $trans_avail && !$blocked;
 
 
 
@@ -1024,6 +908,68 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //         @(out_stage+1)
 //            ?trans_valid = $trans_avail && ! $blocked
 //               $ANY        // Output transaction
+
+
+
+
+
+
+
+
+
+
+// A FIFO using simple_bypass_fifo.
+// Requires include "simple_bypass_fifo.sv".
+//
+// The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
+//
+\TLV m4_old_simple_bypass_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,#_width,/_trans_hier,#_high_water)
+   |_in_pipe
+      @_in_at
+         $out_blocked = /_top|_out_pipe>>m4_align(@_out_at, @_in_at)$blocked;
+         $blocked = (/_top/fifo>>m4_align(0, @_in_at)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, ['#_high_water']))) && $out_blocked;
+   /fifo
+      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
+         fifo(.clk(clk), .reset(/_top|m4_in_pipe>>m4_align(@_in_at, 0)$reset),
+              .push(/_top|_in_pipe>>m4_align(@_in_at, 0)$trans_valid),
+              .data_in(/_top|_in_pipe['']/_trans_hier>>m4_align(@_in_at, 0)$ANY),
+              .pop(/_top|_out_pipe>>m4_align(@_out_at, 0)$trans_valid),
+              .data_out(/_top|_out_pipe['']/_trans_hier>>m4_align(@_out_at, 0)$$ANY),
+              .cnt($$cnt[2:0]));
+   |_out_pipe
+      @_out_at
+         $trans_avail = /_top/fifo>>m4_align(0, @_out_at)$cnt != 3'b0 || /_top|_in_pipe>>m4_align(@_in_at, @m4_out_at)$trans_avail;
+         $trans_valid = $trans_avail && !$blocked;
+
+
+
+
+// A FIFO using simple_bypass_fifo.
+// Requires include "simple_bypass_fifo.sv".
+//
+// The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
+//
+// Args:
+//   /_top, |_in, @_in, |_out, @_out, #_depth, #_width: as one would expect.
+//   /_trans: hierarchy for transaction, eg: ['/flit'] or ['']
+//   #_high_water: Default to 0.  Number of additional entries beyond full.
+\TLV simple_bypass_fifo_v2(/_top, |_in, @_in, |_out, @_out, #_depth, #_width, /_trans, #_high_water)
+   |_in
+      @_in
+         $out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
+         $blocked = (/_top/fifo>>m4_align(0, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
+   /fifo
+      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
+         fifo(.clk(clk), .reset(/_top|_in>>m4_align(@_in, 0)$reset),
+              .push(/_top|_in>>m4_align(@_in, 0)$trans_valid),
+              .data_in(/_top|_in/_trans>>m4_align(@_in, 0)$ANY),
+              .pop(/_top|_out>>m4_align(@_out, 0)$trans_valid),
+              .data_out(/_top|_out/_trans>>m4_align(@_out, 0)$$ANY),
+              .cnt($$cnt[2:0]));
+   |_out
+      @_out
+         $trans_avail = /_top/fifo>>m4_align(0, @_out)$cnt != 3'b0 || /_top|_in>>m4_align(@_in, @_out)$trans_avail;
+         $trans_valid = $trans_avail && !$blocked;
 
 
 
