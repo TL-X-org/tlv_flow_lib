@@ -323,215 +323,6 @@ m4_popdef(['m4_out_stage'])
 
 
 
-// A simple flop-based FIFO with entry-granular clock gating.
-// Note: Simulation is less efficient due to the explicit clock gating.
-//
-// m4+flop_fifo_v2(top, in_pipe, in_stage, out_pipe, out_stage, depth, trans_hier [, high_water])
-//
-// Input interface:
-//   |in_pipe
-//      @in_stage
-//         $reset         // A reset signal.
-//         $trans_avail   // A transaction is available for consumption.
-//         $trans_valid   // = $trans_avail && ! $blocked;
-//         ?$trans_valid
-//            $ANY        // Input transaction (under trans_hier if non-empty)
-//   |out_pipe
-//      @out_stage
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output interface:
-//   |in_pipe
-//      @in_stage
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |out_pipe
-//      @out_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         $trans_valid = $trans_avail && ! $blocked
-//      @out_stage
-//         ?$trans_valid
-//            $ANY        // Output transaction (under trans_hier if given)
-//
-// Three interfaces are available for backpressure.  The interface above shows the $blocked interface, but
-// any of the three may be used:
-//   1) $blocked: Backpressure within a cycle.
-//   2) $full or $ValidCount: Reflect a high-water mark that can be used as backpressure.
-//      Useful for sources that are not aware of other possible sources filling the FIFO.
-//   3) |out_pipe$trans_valid: Can be used to track credits for the FIFO.  See m4_credit_counter(..).
-//
-// The head and tail "pointers" are maintained in the following state.  Below shows allocation of 4 entries
-// followed by deallocation of 4 entries in a 4-entry FIFO.  The valid mask for the entries is $state
-// modified by $two_valid, which extends the $state mask by an entry.  This technique uses n+(n log2) state bits (vs.
-// (n log2)*2 for pointers or n*2 for decoded pointers).  It does not require decoders for read/write.
-//
-// $ValidCount 012343210
-//          /0 011110000
-//   $state< 1 000111000
-//          |2 000011100
-//          \3 000000010
-//  $two_valid 001111100
-// Computed:
-//      $empty 100000001
-//       $full 000010000  (Assuming default m4_high_water.)
-//
-// Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
-
-m4_unsupported(['m4_flop_fifo'], 1)
-\TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_high_water)
-   m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
-   m4_pushdef(['m4_counter_width'], \$clog2((#_depth)+1))
-   m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
-   m4_pushdef(['m4_reverse_bypass_align'], m4_align(@_in_at,@_out_at))
-   m4_pushdef(['m4_trans_ind'], m4_ifelse(#_trans_hier, [''], [''], ['   ']))
-   //   @0
-   \SV_plus
-      localparam bit [m4_counter_width-1:0] full_mark_['']m4_plus_inst_id = #_depth - m4_ifelse(#_high_water, [''], 0, ['#_high_water']);
-   // FIFO Instantiation
-   // Hierarchy declarations
-   |_in_pipe
-      /entry[(#_depth)-1:0]
-   |_out_pipe
-      /entry[(#_depth
-   |_in_pipe
-      @_in_at
-         $out_blocked = /_top|_out_pipe>>m4_bypass_align$blocked;
-         $blocked = >>1$full && $out_blocked;
-         `BOGUS_USE($blocked)   // Not required to be consumed elsewhere.
-         $would_bypass = >>1$empty;
-         $bypass = $would_bypass && ! $out_blocked;
-         $push = $trans_valid && ! $bypass;
-         $grow   =   $trans_valid &&   $out_blocked;
-         $shrink = ! $trans_avail && ! $out_blocked && ! >>1$empty;
-         $valid_count[m4_counter_width-1:0] = $reset ? '0
-                                                     : >>1$valid_count + (
-                                                          $grow   ? { {(m4_counter_width-1){1'b0}}, 1'b1} :
-                                                          $shrink ? '1
-                                                                  : '0
-                                                       );
-         // At least 2 valid entries.
-         //$two_valid = | $ValidCount[m4_counter_width-1:1];
-         // but logic depth minimized by taking advantage of prev count >= 4.
-         $two_valid = | >>1$valid_count[m4_counter_width-1:2] || | $valid_count[2:1];
-         // These are an optimization of the commented block below to operate on vectors, rather than bits.
-         // TODO: Keep optimizing...
-         {/entry[*]$$prev_entry_was_tail} = {/entry[*]>>1$reconstructed_is_tail\[m4_eval(#_depth-2):0], /entry[m4_eval(#_depth-1)]>>1$reconstructed_is_tail} /* circular << */;
-         {/entry[*]$$push} = {#_depth{$push}} & /entry[*]$prev_entry_was_tail;
-         /entry[*]
-            // Replaced with optimized versions above:
-            // $prev_entry_was_tail = /entry[(entry+(m4_depth)-1)%(m4_depth)]>>1$reconstructed_is_tail;
-            // $push = |_in_pipe$push && $prev_entry_was_tail;
-            $valid = (>>1$reconstructed_valid && ! /_top|_out_pipe/entry>>m4_bypass_align$pop) || $push;
-            $is_tail = |_in_pipe$trans_valid ? $prev_entry_was_tail  // shift tail
-                                               : >>1$reconstructed_is_tail;  // retain tail
-            $state = |_in_pipe$reset ? 1'b0
-                                       : $valid && ! (|_in_pipe$two_valid && $is_tail);
-      @m4_eval(@_in_at + 1)
-         $empty = ! $two_valid && ! $valid_count[0];
-         $full = ($valid_count == full_mark_['']m4_plus_inst_id);  // Could optimize for power-of-two depth.
-      /entry[*]
-         @m4_eval(@_in_at + 1)
-            $prev_entry_state = /entry[(entry+(#_depth)-1)%(#_depth)]$state;
-            $next_entry_state = /entry[(entry+1)%(#_depth)]$state;
-            $reconstructed_is_tail = (  /_top|_in_pipe$two_valid && (!$state && $prev_entry_state)) ||
-                                     (! /_top|_in_pipe$two_valid && (!$next_entry_state && $state)) ||
-                                     (|_in_pipe$empty && (entry == 0));  // need a tail when empty for push
-            $is_head = $state && ! $prev_entry_state;
-            $reconstructed_valid = $state || (/_top|_in_pipe$two_valid && $prev_entry_state);
-      // Write data
-   |_in_pipe
-      @_in_at
-         /entry[*]
-               //?$push
-               //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
-            /_trans_hier
-m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
-      // Read data
-   |_out_pipe
-      @_out_at
-            //$pop  = ! /m4_top|m4_in_pipe>>m4_align(m4_in_at + 1, m4_out_at)$empty && ! $blocked;
-         /entry[*]
-            $is_head = /_top|_in_pipe/entry>>m4_align(@_in_at + 1, @_out_at)$is_head;
-            $pop  = $is_head && ! |_out_pipe$blocked;
-            /read_masked
-               /_trans_hier
-m4_trans_ind               $ANY = /entry$is_head ? /_top|_in_pipe/entry['']/_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
-            /accum
-               /_trans_hier
-m4_trans_ind               $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans_hier$ANY) |
-                             /entry/read_masked['']/_trans_hier$ANY;
-         /head
-            $trans_avail = |_out_pipe$trans_avail;
-            ?$trans_avail
-                /_trans_hier
-m4_trans_ind               $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans_hier$ANY;
-      // Bypass
-      |_out_pipe
-         @_out_at
-            // Available output.  Sometimes it's necessary to know what would be coming to determined
-            // if it's blocked.  This can be used externally in that case.
-            /fifo_head
-               $trans_avail = |_out_pipe$trans_avail;
-               ?$trans_avail
-                  /_trans_hier
-m4_trans_ind               $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
-m4_trans_ind                            ? /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY
-m4_trans_ind                            : |_out_pipe/head['']/_trans_hier$ANY;
-         $trans_avail = ! /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass || /_top|_in_pipe>>m4_reverse_bypass_align$trans_avail;
-         $trans_valid = $trans_avail && ! $blocked;
-         ?$trans_valid
-            /_trans_hier
-m4_trans_ind            $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
-
-   
-
-   /* Alternate code for pointer indexing.  Replaces $ANY expression above.
-
-   // Hierarchy
-   |m4_in_pipe
-      /entry2[(m4_depth)-1:0]
-
-   // Head/Tail ptrs.
-   |m4_in_pipe
-      @m4_in_at
-         >>1$WrPtr[m4_ptr_width-1:0] =
-             $reset       ? '0 :
-             $trans_valid ? ($WrPtr == (m4_depth - 1))
-                              ? '0
-                              : $WrPtr + {{(m4_ptr_width-1){1'b0}}, 1'b1} :
-                            $RETAIN;
-   |m4_out_pipe
-      @m4_out_at
-         >>1$RdPtr[m4_ptr_width-1:0] =
-             /m4_top|m4_in_pipe>>m4_reverse_bypass_align$reset
-                          ? '0 :
-             $trans_valid ? ($RdPtr == (m4_depth - 1))
-                              ? '0
-                              : $RdPtr + {{(m4_ptr_width-1){1'b0}}, 1'b1} :
-                            $RETAIN;
-   // Write FIFO
-   |m4_in_pipe
-      @m4_in_at
-         $dummy = '0;
-         ?$trans_valid
-            // This doesn't work because SV complains for FIFOs in replicated context that
-            // there are multiple procedures that assign the signals.
-            // Array writes can be done in an SV module.
-            // The only long-term resolutions are support for module generation and use
-            // signals declared within for loops with cross-hierarchy references in SV.
-            // TODO: To make a simulation-efficient FIFO, use DesignWare.
-            {/entry2[$WrPtr]$$ANY} = $ANY;
-   // Read FIFO
-   |m4_out_pipe
-      @m4_out_at
-         /read2
-            $trans_valid = |m4_out_pipe$trans_valid;
-            ?$trans_valid
-               $ANY = /m4_top|m4_in_pipe/entry2[|m4_out_pipe$RdPtr]>>m4_reverse_bypass_align$ANY;
-            `BOGUS_USE($dummy)
-         ?$trans_valid
-            $ANY = /read2$ANY;
-   */
 
 
 // A FIFO using simple_bypass_fifo.
@@ -774,6 +565,7 @@ m4_popdef(['m4_trans_ind'])
 
 
 '])m4_dnl
+
 // Credit counter.
 // m4_credit_counter(CreditState, MAX_BIT, MAX_CREDIT, reset, incr_sig, decr_sig, ind)
 // Eg: m4+credit_counter($Credit, 4, 10, /top|rs<>0$reset, $credit_returned, $credit_consumed)
@@ -867,6 +659,215 @@ m4_popdef(['m4_trans_ind'])
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;
               // This trans is blocked (whether valid or not) if the next stage is recirculating.
    
+// A simple flop-based FIFO with entry-granular clock gating.
+// Note: Simulation is less efficient due to the explicit clock gating.
+//
+// m4+flop_fifo_v2(top, in_pipe, in_stage, out_pipe, out_stage, depth, trans_hier [, high_water])
+//
+// Input interface:
+//   |in_pipe
+//      @in_stage
+//         $reset         // A reset signal.
+//         $trans_avail   // A transaction is available for consumption.
+//         $trans_valid   // = $trans_avail && ! $blocked;
+//         ?$trans_valid
+//            $ANY        // Input transaction (under trans_hier if non-empty)
+//   |out_pipe
+//      @out_stage
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output interface:
+//   |in_pipe
+//      @in_stage
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |out_pipe
+//      @out_stage
+//         $trans_avail   // A transaction is available for consumption.
+//         $trans_valid = $trans_avail && ! $blocked
+//      @out_stage
+//         ?$trans_valid
+//            $ANY        // Output transaction (under trans_hier if given)
+//
+// Three interfaces are available for backpressure.  The interface above shows the $blocked interface, but
+// any of the three may be used:
+//   1) $blocked: Backpressure within a cycle.
+//   2) $full or $ValidCount: Reflect a high-water mark that can be used as backpressure.
+//      Useful for sources that are not aware of other possible sources filling the FIFO.
+//   3) |out_pipe$trans_valid: Can be used to track credits for the FIFO.  See m4_credit_counter(..).
+//
+// The head and tail "pointers" are maintained in the following state.  Below shows allocation of 4 entries
+// followed by deallocation of 4 entries in a 4-entry FIFO.  The valid mask for the entries is $state
+// modified by $two_valid, which extends the $state mask by an entry.  This technique uses n+(n log2) state bits (vs.
+// (n log2)*2 for pointers or n*2 for decoded pointers).  It does not require decoders for read/write.
+//
+// $ValidCount 012343210
+//          /0 011110000
+//   $state< 1 000111000
+//          |2 000011100
+//          \3 000000010
+//  $two_valid 001111100
+// Computed:
+//      $empty 100000001
+//       $full 000010000  (Assuming default m4_high_water.)
+//
+// Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
+
+
+m4_unsupported(['m4_flop_fifo'], 1)
+\TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_high_water)
+   m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
+   m4_pushdef(['m4_counter_width'], \$clog2((#_depth)+1))
+   m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
+   m4_pushdef(['m4_reverse_bypass_align'], m4_align(@_in_at,@_out_at))
+   m4_pushdef(['m4_trans_ind'], m4_ifelse(#_trans_hier, [''], [''], ['   ']))
+   //   @0
+   \SV_plus
+      localparam bit [m4_counter_width-1:0] full_mark_['']m4_plus_inst_id = #_depth - m4_ifelse(#_high_water, [''], 0, ['#_high_water']);
+   // FIFO Instantiation
+   // Hierarchy declarations
+   |_in_pipe
+      /entry[(#_depth)-1:0]
+   |_out_pipe
+      /entry[(#_depth)-1:0]
+   |_in_pipe
+      @_in_at
+         $out_blocked = /_top|_out_pipe>>m4_bypass_align$blocked;
+         $blocked = >>1$full && $out_blocked;
+         `BOGUS_USE($blocked)   // Not required to be consumed elsewhere.
+         $would_bypass = >>1$empty;
+         $bypass = $would_bypass && ! $out_blocked;
+         $push = $trans_valid && ! $bypass;
+         $grow   =   $trans_valid &&   $out_blocked;
+         $shrink = ! $trans_avail && ! $out_blocked && ! >>1$empty;
+         $valid_count[m4_counter_width-1:0] = $reset ? '0
+                                                     : >>1$valid_count + (
+                                                          $grow   ? { {(m4_counter_width-1){1'b0}}, 1'b1} :
+                                                          $shrink ? '1
+                                                                  : '0
+                                                       );
+         // At least 2 valid entries.
+         //$two_valid = | $ValidCount[m4_counter_width-1:1];
+         // but logic depth minimized by taking advantage of prev count >= 4.
+         $two_valid = | >>1$valid_count[m4_counter_width-1:2] || | $valid_count[2:1];
+         // These are an optimization of the commented block below to operate on vectors, rather than bits.
+         // TODO: Keep optimizing...
+         {/entry[*]$$prev_entry_was_tail} = {/entry[*]>>1$reconstructed_is_tail\[m4_eval(#_depth-2):0], /entry[m4_eval(#_depth-1)]>>1$reconstructed_is_tail} /* circular << */;
+         {/entry[*]$$push} = {#_depth{$push}} & /entry[*]$prev_entry_was_tail;
+         /entry[*]
+            // Replaced with optimized versions above:
+            // $prev_entry_was_tail = /entry[(entry+(m4_depth)-1)%(m4_depth)]>>1$reconstructed_is_tail;
+            // $push = |_in_pipe$push && $prev_entry_was_tail;
+            $valid = (>>1$reconstructed_valid && ! /_top|_out_pipe/entry>>m4_bypass_align$pop) || $push;
+            $is_tail = |_in_pipe$trans_valid ? $prev_entry_was_tail  // shift tail
+                                               : >>1$reconstructed_is_tail;  // retain tail
+            $state = |_in_pipe$reset ? 1'b0
+                                       : $valid && ! (|_in_pipe$two_valid && $is_tail);
+      @m4_stage_eval(@_in_at>>1)
+         $empty = ! $two_valid && ! $valid_count[0];
+         $full = ($valid_count == full_mark_['']m4_plus_inst_id);  // Could optimize for power-of-two depth.
+      /entry[*]
+         @m4_stage_eval(@_in_at>>1)
+            $prev_entry_state = /entry[(entry+(#_depth)-1)%(#_depth)]$state;
+            $next_entry_state = /entry[(entry+1)%(#_depth)]$state;
+            $reconstructed_is_tail = (  /_top|_in_pipe$two_valid && (!$state && $prev_entry_state)) ||
+                                     (! /_top|_in_pipe$two_valid && (!$next_entry_state && $state)) ||
+                                     (|_in_pipe$empty && (entry == 0));  // need a tail when empty for push
+            $is_head = $state && ! $prev_entry_state;
+            $reconstructed_valid = $state || (/_top|_in_pipe$two_valid && $prev_entry_state);
+      // Write data
+   |_in_pipe
+      @_in_at
+         /entry[*]
+               //?$push
+               //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
+            /_trans_hier
+ m4_trans_ind           $ANY = /entry$push ? /_top|_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
+      // Read data
+   |_out_pipe
+      @_out_at
+            //$pop  = ! /m4_top|m4_in_pipe>>m4_align(m4_in_at + 1, m4_out_at)$empty && ! $blocked;
+         /entry[*]
+            $is_head = /_top|_in_pipe/entry>>m4_align(@_in_at + 1, @_out_at)$is_head;
+            $pop  = $is_head && ! |_out_pipe$blocked;
+            /read_masked
+               /_trans_hier
+ m4_trans_ind              $ANY = /entry$is_head ? /_top|_in_pipe/entry['']/_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
+            /accum
+               /_trans_hier
+ m4_trans_ind              $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans_hier$ANY) |
+                             /entry/read_masked['']/_trans_hier$ANY;
+         /head
+            $trans_avail = |_out_pipe$trans_avail;
+            ?$trans_avail
+               /_trans_hier
+ m4_trans_ind              $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans_hier$ANY;
+   // Bypass
+   |_out_pipe
+      @_out_at
+         // Available output.  Sometimes it's necessary to know what would be coming to determined
+         // if it's blocked.  This can be used externally in that case.
+         /fifo_head
+            $trans_avail = |_out_pipe$trans_avail;
+            ?$trans_avail
+               /_trans_hier
+ m4_trans_ind              $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
+ m4_trans_ind                           ? /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY
+ m4_trans_ind                           : |_out_pipe/head['']/_trans_hier$ANY;
+         $trans_avail = ! /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass || /_top|_in_pipe>>m4_reverse_bypass_align$trans_avail;
+         $trans_valid = $trans_avail && ! $blocked;
+         ?$trans_valid
+            /_trans_hier
+ m4_trans_ind           $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
+
+
+   /* Alternate code for pointer indexing.  Replaces $ANY expression above.
+
+   // Hierarchy
+   |m4_in_pipe
+      /entry2[(m4_depth)-1:0]
+
+   // Head/Tail ptrs.
+   |m4_in_pipe
+      @m4_in_at
+         >>1$WrPtr[m4_ptr_width-1:0] =
+             $reset       ? '0 :
+             $trans_valid ? ($WrPtr == (m4_depth - 1))
+                              ? '0
+                              : $WrPtr + {{(m4_ptr_width-1){1'b0}}, 1'b1} :
+                            $RETAIN;
+   |m4_out_pipe
+      @m4_out_at
+         >>1$RdPtr[m4_ptr_width-1:0] =
+             /m4_top|m4_in_pipe>>m4_reverse_bypass_align$reset
+                          ? '0 :
+             $trans_valid ? ($RdPtr == (m4_depth - 1))
+                              ? '0
+                              : $RdPtr + {{(m4_ptr_width-1){1'b0}}, 1'b1} :
+                            $RETAIN;
+   // Write FIFO
+   |m4_in_pipe
+      @m4_in_at
+         $dummy = '0;
+         ?$trans_valid
+            // This doesn't work because SV complains for FIFOs in replicated context that
+            // there are multiple procedures that assign the signals.
+            // Array writes can be done in an SV module.
+            // The only long-term resolutions are support for module generation and use
+            // signals declared within for loops with cross-hierarchy references in SV.
+            // TODO: To make a simulation-efficient FIFO, use DesignWare.
+            {/entry2[$WrPtr]$$ANY} = $ANY;
+   // Read FIFO
+   |m4_out_pipe
+      @m4_out_at
+         /read2
+            $trans_valid = |m4_out_pipe$trans_valid;
+            ?$trans_valid
+               $ANY = /m4_top|m4_in_pipe/entry2[|m4_out_pipe$RdPtr]>>m4_reverse_bypass_align$ANY;
+            `BOGUS_USE($dummy)
+         ?$trans_valid
+            $ANY = /read2$ANY;
+   */
 
 
 // A one-cycle speculation flow.
@@ -890,6 +891,7 @@ m4_popdef(['m4_trans_ind'])
 //          @m4_comp_stage
 //             $valid
 //
+
 
 \TLV 1cyc_speculate(/_top,|_in_pipe,|_out_pipe,@_spec_stage,@_comp_stage,$_pred_sigs)
    |_in_pipe
