@@ -547,20 +547,6 @@ m4_popdef(['m4_trans_ind'])
 
 
 
-// Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
-// from previous stages of /_scope any contain a $_valid $_src_tag matching $_tag, or /_top/no_bypass$_value otherwise.
-\TLV bypass(/_top, #_cycles, /_scope, $_valid, $_src_tag, $_src_value, $_tag)
-   /bypass#_cycles
-      $ANY =
-         // Bypass stages:
-         m4_ifexpr(#_cycles >= 1, (/_scope>>1$_valid && (/_scope>>1$_src_tag == /_top$_tag)) ? /_scope>>1$_src_value :)
-         m4_ifexpr(#_cycles >= 2, (/_scope>>2$_valid && (/_scope>>2$_src_tag == /_top$_tag)) ? /_scope>>2$_src_value :)
-         m4_ifexpr(#_cycles >= 3, (/_scope>>3$_valid && (/_scope>>3$_src_tag == /_top$_tag)) ? /_scope>>3$_src_value :)
-         /_top/no_bypass$ANY;
-
-
-
-
 
 
 
@@ -712,6 +698,22 @@ m4_popdef(['m4_trans_ind'])
 //       $full 000010000  (Assuming default m4_high_water.)
 //
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
+
+
+
+
+// Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
+// from previous stages of /_scope any contain a $_valid $_src_tag matching $_tag, or /_top/no_bypass$_value otherwise.
+\TLV bypass(/_top, #_cycles, /_scope, $_valid, $_src_tag, $_src_value, $_tag)
+   /bypass#_cycles
+      $ANY =
+         // Bypass stages:
+         m4_ifexpr(#_cycles >= 1, (/_scope>>1$_valid && (/_scope>>1$_src_tag == /_top$_tag)) ? /_scope>>1$_src_value :)
+         m4_ifexpr(#_cycles >= 2, (/_scope>>2$_valid && (/_scope>>2$_src_tag == /_top$_tag)) ? /_scope>>2$_src_value :)
+         m4_ifexpr(#_cycles >= 3, (/_scope>>3$_valid && (/_scope>>3$_src_tag == /_top$_tag)) ? /_scope>>3$_src_value :)
+         /_top/no_bypass$ANY;
+
+
 
 
 m4_unsupported(['m4_flop_fifo'], 1)
