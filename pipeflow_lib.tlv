@@ -38,17 +38,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Arbitration
 //
 
-// Credit counter.
-// m4_credit_counter(CreditState, MAX_BIT, MAX_CREDIT, reset, incr_sig, decr_sig, ind)
-// Eg: m4+credit_counter($Credit, 4, 10, /top|rs<>0$reset, $credit_returned, $credit_consumed)
-\TLV credit_counter($_Credit, #_MAX_BIT, #_MAX_CREDIT, $_reset, $_incr, $_decr)
-   $credit_upd = $_reset || ($_incr ^ $_decr);
-   ?$credit_upd
-      $_Credit[#_MAX_BIT:0] <=
-           $_reset
-              ? m4_eval(#_MAX_BIT + 1)'d['']#_MAX_CREDIT
-              : ($_Credit + ($_incr ? m4_eval(#_MAX_BIT + 1)'d1 : '1));
-
 
 
 // A backpressured flop stage.
@@ -1045,3 +1034,15 @@ m4_popdef(['m4_pred_sigs'])
 
 
 '])m4_dnl
+// Credit counter.
+// m4_credit_counter(CreditState, MAX_BIT, MAX_CREDIT, reset, incr_sig, decr_sig, ind)
+// Eg: m4+credit_counter($Credit, 4, 10, /top|rs<>0$reset, $credit_returned, $credit_consumed)
+\TLV credit_counter($_Credit, #_MAX_BIT, #_MAX_CREDIT, $_reset, $_incr, $_decr)
+   $credit_upd = $_reset || ($_incr ^ $_decr);
+   ?$credit_upd
+      $_Credit[#_MAX_BIT:0] <=
+           $_reset
+              ? m4_eval(#_MAX_BIT + 1)'d['']#_MAX_CREDIT
+              : ($_Credit + ($_incr ? m4_eval(#_MAX_BIT + 1)'d1 : '1));
+
+
