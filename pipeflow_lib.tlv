@@ -645,6 +645,76 @@ m4_popdef(['m4_trans_ind'])
    m4+bp_stage(/top, ']|_name['['']m4_decr(m4_stage), 1, ']|_name['['']m4_stage, 1)
    '])
 
+// ==========================================================
+//
+// Stall Pipeline
+//
+
+// One cycle of a stall pipeline.
+// m4_stall_stage(top, in_pipe, in_stage, mid_pipe, mid_stage, out_pipe, out_stage[, indentation_str])
+//   top:                   eg: 'top'
+//   in/mid/out_pipe/stage: The pipeline name and stage number of the input (A-phase) stage
+//                          and the output stage.
+//   indentation_str:       eg: '   ' to provide 1 additional level of indentation
+//
+// This creates recirculation for a transaction going from in_pipe to out_pipe,
+// where in_pipe/stage is one cycle from out_pipe/stage without backpressure.
+//
+// Currently, this uses recirculation, but it is intended to be modified to use flop enables
+// to hold the transactions.
+//
+// Input interface:
+//   |in_pipe
+//      @in_stage
+//         $trans_avail   // A transaction is available for consumption.
+//         ?trans_valid = $trans_avail && ! $blocked
+//            /trans
+//               $ANY     // input transaction
+//   |out_pipe
+//      @out_stage
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output signals:
+//   |in_pipe
+//      @in_stage
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |out_pipe
+//      @out_stage
+//         $trans_avail   // A transaction is available for consumption.
+//         ?trans_valid   // $trans_avail && ! $blocked
+//            /trans
+//               $ANY     // Output transaction
+//
+\TLV stall_stage(/_top,|_in_pipe,@_in_stage,|_out_pipe,@_out_stage)
+   |_in_pipe
+      @_in_stage
+         $blocked = /_top|_out_pipe<>0$blocked;
+   |_out_pipe
+      @_out_stage
+         $trans_avail = $blocked ? >>1$trans_avail : /_top|_in_pipe>>1$trans_avail;
+         $trans_valid = $trans_avail && !$blocked;
+         ?$trans_valid
+            /trans_hold
+               $ANY = |_out_pipe$blocked ? >>1$ANY : /_top|_in_pipe/trans>>1$ANY;
+         ?$trans_avail
+            /trans
+               $ANY = |_out_pipe/trans_hold$ANY;
+
+
+
+
+// Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
+// from previous stages of /_scope any contain a $_valid $_src_tag matching $_tag, or /_top/no_bypass$_value otherwise.
+\TLV bypass(/_top, #_cycles, /_scope, $_valid, $_src_tag, $_src_value, $_tag)
+   /bypass#_cycles
+      $ANY =
+         // Bypass stages:
+         m4_ifexpr(#_cycles >= 1, (/_scope>>1$_valid && (/_scope>>1$_src_tag == /_top$_tag)) ? /_scope>>1$_src_value :)
+         m4_ifexpr(#_cycles >= 2, (/_scope>>2$_valid && (/_scope>>2$_src_tag == /_top$_tag)) ? /_scope>>2$_src_value :)
+         m4_ifexpr(#_cycles >= 3, (/_scope>>3$_valid && (/_scope>>3$_src_tag == /_top$_tag)) ? /_scope>>3$_src_value :)
+         /_top/no_bypass$ANY;
+
 
 // A simple flop-based FIFO with entry-granular clock gating.
 // Note: Simulation is less efficient due to the explicit clock gating.
@@ -701,18 +771,6 @@ m4_popdef(['m4_trans_ind'])
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
 
 
-
-
-// Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
-// from previous stages of /_scope any contain a $_valid $_src_tag matching $_tag, or /_top/no_bypass$_value otherwise.
-\TLV bypass(/_top, #_cycles, /_scope, $_valid, $_src_tag, $_src_value, $_tag)
-   /bypass#_cycles
-      $ANY =
-         // Bypass stages:
-         m4_ifexpr(#_cycles >= 1, (/_scope>>1$_valid && (/_scope>>1$_src_tag == /_top$_tag)) ? /_scope>>1$_src_value :)
-         m4_ifexpr(#_cycles >= 2, (/_scope>>2$_valid && (/_scope>>2$_src_tag == /_top$_tag)) ? /_scope>>2$_src_value :)
-         m4_ifexpr(#_cycles >= 3, (/_scope>>3$_valid && (/_scope>>3$_src_tag == /_top$_tag)) ? /_scope>>3$_src_value :)
-         /_top/no_bypass$ANY;
 
 
 
