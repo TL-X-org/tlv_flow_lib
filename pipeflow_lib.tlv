@@ -42,81 +42,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-// A SELF pipeline.
-// m4_self_pipeline(top, name, in_pipe, in_stage, first_phase, last_phase[, out_pipe, out_stage])
-//
-// m4_first_phase should be odd, m4_last_phase should be even.
-// This creates recirculation from m4_first_phase to m4_last_phase.
-//   (m4_last_phase - m4_first_phase + 1 recirculations).  Each phase from m4_first_phase
-//   to m4_last_phase is a pipeline for transactions from a recirculation mux in @0/@0L (odd/even
-//   phase) (soon to be clock gating with a @0/@0L enable), where transaction logic is intended
-//   for @0L/@1 (odd/even).
-//
-// Transaction logic can be defined externally, and spread across the SELF pipeline.
-// The transaction should come in on:
-//   |m4_in_pipe@m4_in_stage (would align to: |m4_name[''](m4_first_phase-1)@1)
-// and transaction logic placed in:
-//   |m4_name['']m4_phase@0L(if even phase)/1(if odd phase)
-// and the transaction leaves from:
-//   |m4_name['']m4_last_phase@0 or |m4_out_pipe@(m4_out_stage-1)
-//
-// Input interface:
-//   |m4_in_pipe
-//      @m4_in_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
-//            $ANY        // input transaction.
-//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
-//      @1
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output signals:
-//   |m4_in_pipe
-//      @m4_in_stage
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
-//      @1
-//         $trans_avail   // A transaction is available for consumption.
-m4_define_plus(['m4_self_pipeline'], ['
-m4_pushdef(['m4_top'],         ['$5'])
-m4_pushdef(['m4_name'],        ['$6'])
-m4_pushdef(['m4_in_pipe'],     ['$7'])
-m4_pushdef(['m4_in_stage'],    ['$8'])
-m4_pushdef(['m4_first_phase'], ['$9'])
-m4_pushdef(['m4_last_phase'],  ['$10'])
-m4_pushdef(['m4_out_pipe'],    ['$11'])
-m4_pushdef(['m4_out_stage'],   ['$12'])
-
-'], m4___file__, m4___line__, ['
-m4_forloop(['m4_cycle'], 0, m4_eval((m4_last_phase - m4_first_phase) / 2), ['
-m4_define(['m4_phase'], m4_eval(m4_first_phase + (m4_cycle * 2)))
-m4_define(['m4_in_p'], m4_ifelse(m4_cycle, 0, m4_in_pipe,  m4_name['']m4_decr(m4_phase)))
-m4_define(['m4_in_s'], m4_ifelse(m4_cycle, 0, m4_in_stage, 1))
-m4_define(['m4_out_p'], m4_ifelse(m4_ifelse(m4_out_pipe, , NO_MATCH, )m4_cycle, m4_eval((m4_last_phase - m4_first_phase) / 2), m4_out_pipe, m4_name['']m4_incr(m4_phase)))
-m4_define(['m4_out_s'], m4_ifelse(m4_ifelse(m4_out_stage, , NO_MATCH, )m4_cycle, m4_eval((m4_last_phase - m4_first_phase) / 2), m4_out_stage, 1))
-m4_self_cycle(['$1'], ']']m4___file__['[', ']']m4___line__['[', ['m4_['']self_cycle(...)'], m4_top, m4_in_p, m4_in_s, m4_name['']m4_phase, 1, m4_out_p, m4_out_s)
-'])'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_name'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_stage'])
-m4_popdef(['m4_first_phase'])
-m4_popdef(['m4_last_phase'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_stage'])
-'])
-
-
-
-
-
-
-
-
-
 
 '])m4_dnl
 
@@ -399,6 +324,57 @@ m4_forloop(['m4_cycle'], m4_first_cycle, m4_last_cycle, ['
 \TLV self_cycle(/_top,|_in_pipe,@_in_stage,|_mid_pipe,@_mid_stage,|_out_pipe,@_out_stage)
    m4+bp_stage(/_top, |_in_pipe,  @_in_stage,           |_mid_pipe, @_mid_stage, 1, 0)  // Not sure indentation is passed right.
    m4+bp_stage(/_top, |_mid_pipe, m4_decr(@_mid_stage), |_out_pipe, @_out_stage, 0, 1)
+
+
+// A SELF pipeline.
+// m4_self_pipeline(top, name, in_pipe, in_stage, first_phase, last_phase[, out_pipe, out_stage])
+//
+// m4_first_phase should be odd, m4_last_phase should be even.
+// This creates recirculation from m4_first_phase to m4_last_phase.
+//   (m4_last_phase - m4_first_phase + 1 recirculations).  Each phase from m4_first_phase
+//   to m4_last_phase is a pipeline for transactions from a recirculation mux in @0/@0L (odd/even
+//   phase) (soon to be clock gating with a @0/@0L enable), where transaction logic is intended
+//   for @0L/@1 (odd/even).
+//
+// Transaction logic can be defined externally, and spread across the SELF pipeline.
+// The transaction should come in on:
+//   |m4_in_pipe@m4_in_stage (would align to: |m4_name[''](m4_first_phase-1)@1)
+// and transaction logic placed in:
+//   |m4_name['']m4_phase@0L(if even phase)/1(if odd phase)
+// and the transaction leaves from:
+//   |m4_name['']m4_last_phase@0 or |m4_out_pipe@(m4_out_stage-1)
+//
+// Input interface:
+//   |m4_in_pipe
+//      @m4_in_stage
+//         $trans_avail   // A transaction is available for consumption.
+//         ?trans_valid = $trans_avail && ! $blocked
+//            $ANY        // input transaction.
+//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
+//      @1
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output signals:
+//   |m4_in_pipe
+//      @m4_in_stage
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
+//      @1
+//         $trans_avail   // A transaction is available for consumption.
+
+
+\TLV	self_pipeline (/_top,|_name,|_in_pipe,@_in_stage,@_first_phase,@_last_phase,|_out_pipe,@_out_stage)
+   m4_forloop(['m4_cycle'], 0, m4_eval((@_last_phase - @_first_phase) / 2), ['
+   m4_define(['m4_phase'], m4_eval(@_first_phase + (m4_cycle * 2)))
+   m4_define(['m4_in_p'], m4_ifelse(m4_cycle, 0, |_in_pipe,  |_name['']m4_decr(m4_phase)))
+   m4_define(['m4_in_s'], m4_ifelse(m4_cycle, 0, @_in_stage, 1))
+   m4_define(['m4_out_p'], m4_ifelse(m4_ifelse(|_out_pipe, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), |_out_pipe, |_name['']m4_incr(m4_phase)))
+   m4_define(['m4_out_s'], m4_ifelse(m4_ifelse(@_out_stage, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), @_out_stage, 1))
+   m4_self_cycle(/_top, m4_in_p, m4_in_s,|_name['']m4_phase, 1, m4_out_p, m4_out_s)'])
+
+
+
 
 
 // A simple flop-based FIFO with entry-granular clock gating.
