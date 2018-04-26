@@ -898,7 +898,6 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //
 
 
-
  m4_unsupported(['m4_vc_flop_fifo'], 1)
 \TLV vc_flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_vc_range,#_prio_range,@_bypass_at,#_high_water)
 
@@ -919,7 +918,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
                /_trans_hier
  m4_trans_ind              $ANY = /_top|_in_pipe['']/_trans_hier$ANY;
       // Instantiate FIFO.  Output to stage (m4_out_at - 1) because bypass is m4_out_at.
-      m4_flop_fifo_v2( |_in_pipe, @_in_at, |_out_pipe, @_arb_at, #_depth, /_trans_hier, #_high_water)
+      m4+flop_fifo_v2( |_in_pipe, @_in_at, |_out_pipe, @_arb_at, #_depth, /_trans_hier, #_high_water)
 
    // FIFO select.
    //
@@ -967,7 +966,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
          /fifos_out
             $fifo_trans_avail = |_out_pipe$fifo_trans_avail;
             /vc[#_vc_range]
-            m4_select( $ANY, /_top, /vc, |_out_pipe['']/_trans_hier, |_out_pipe, $fifo_sel, $ANY, $fifo_trans_avail)
+            m4+select( $ANY, /_top, /vc, |_out_pipe['']/_trans_hier, |_out_pipe, $fifo_sel, $ANY, $fifo_trans_avail)
 
          // Output transaction
          //
