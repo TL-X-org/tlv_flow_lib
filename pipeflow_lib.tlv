@@ -42,70 +42,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-// ==========================================================
-//
-// SELF (Synchronous ELastic Flow) pipelines.
-//
-
-// One cycle of a SELF pipeline.
-// m4_self_cycle(top, in_pipe, in_stage, mid_pipe, mid_stage, out_pipe, out_stage[, indentation_str])
-//   top:                   eg: 'top'
-//   in/mid/out_pipe/stage: The pipeline name and stage number of the input (A-phase) stage
-//                          and the output stage.
-//   indentation_str:       eg: '   ' to provide 1 additional level of indentation
-//
-// This creates backpressure and recirculation for a transaction going from in_pipe to out_pipe,
-// where in_pipe/stage is one cycle from out pipe/stage without backpressure.  There are two
-// stages of backpressure, one A-phase, and one B-phase.
-//
-// Currently, this uses recirculation, but it is intended to be modified to use latch enables
-// to hold the transactions.
-//
-// Input interface:
-//   |in_pipe
-//      @in_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
-//            $ANY        // input transaction
-//   |out_pipe
-//      @out_stage
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output signals:
-//   |in_pipe
-//      @in_stage
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |out_pipe
-//      @out_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid   // $trans_avail && ! $blocked
-//            $ANY        // Output transaction
-m4_define_plus(['m4_self_cycle'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_stage'],  ['$7'])
-m4_pushdef(['m4_mid_pipe'],  ['$8'])
-m4_pushdef(['m4_mid_stage'], ['$9'])
-m4_pushdef(['m4_out_pipe'],  ['$10'])
-m4_pushdef(['m4_out_stage'], ['$11'])
-
-'], m4___file__, m4___line__, ['
-m4_bp_stage(m4_top, m4_in_pipe,  m4_in_stage,           m4_mid_pipe, m4_mid_stage, ['$1'], 1, 0)  // Not sure indentation is passed right.
-m4_bp_stage(m4_top, m4_mid_pipe, m4_decr(m4_mid_stage), m4_out_pipe, m4_out_stage, ['$1'], 0, 1)
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_stage'])
-m4_popdef(['m4_mid_pipe'])
-m4_popdef(['m4_mid_stage'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_stage'])
-'])
-
-
 // A SELF pipeline.
 // m4_self_pipeline(top, name, in_pipe, in_stage, first_phase, last_phase[, out_pipe, out_stage])
 //
@@ -418,6 +354,51 @@ m4_forloop(['m4_cycle'], m4_first_cycle, m4_last_cycle, ['
          m4_ifexpr(#_cycles >= 2, (/_scope>>2$_valid && (/_scope>>2$_src_tag == /_top$_tag)) ? /_scope>>2$_src_value :)
          m4_ifexpr(#_cycles >= 3, (/_scope>>3$_valid && (/_scope>>3$_src_tag == /_top$_tag)) ? /_scope>>3$_src_value :)
          /_top/no_bypass$ANY;
+
+// ==========================================================
+//
+// SELF (Synchronous ELastic Flow) pipelines.
+//
+
+// One cycle of a SELF pipeline.
+// m4_self_cycle(top, in_pipe, in_stage, mid_pipe, mid_stage, out_pipe, out_stage[, indentation_str])
+//   top:                   eg: 'top'
+//   in/mid/out_pipe/stage: The pipeline name and stage number of the input (A-phase) stage
+//                          and the output stage.
+//   indentation_str:       eg: '   ' to provide 1 additional level of indentation
+//
+// This creates backpressure and recirculation for a transaction going from in_pipe to out_pipe,
+// where in_pipe/stage is one cycle from out pipe/stage without backpressure.  There are two
+// stages of backpressure, one A-phase, and one B-phase.
+//
+// Currently, this uses recirculation, but it is intended to be modified to use latch enables
+// to hold the transactions.
+//
+// Input interface:
+//   |in_pipe
+//      @in_stage
+//         $trans_avail   // A transaction is available for consumption.
+//         ?trans_valid = $trans_avail && ! $blocked
+//            $ANY        // input transaction
+//   |out_pipe
+//      @out_stage
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output signals:
+//   |in_pipe
+//      @in_stage
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |out_pipe
+//      @out_stage
+//         $trans_avail   // A transaction is available for consumption.
+//         ?trans_valid   // $trans_avail && ! $blocked
+//            $ANY        // Output transaction
+
+
+\TLV self_cycle(/_top,|_in_pipe,@_in_stage,|_mid_pipe,@_mid_stage,|_out_pipe,@_out_stage)
+   m4+bp_stage(/_top, |_in_pipe,  @_in_stage,           |_mid_pipe, @_mid_stage, 1, 0)  // Not sure indentation is passed right.
+   m4+bp_stage(/_top, |_mid_pipe, m4_decr(@_mid_stage), |_out_pipe, @_out_stage, 0, 1)
 
 
 // A simple flop-based FIFO with entry-granular clock gating.
