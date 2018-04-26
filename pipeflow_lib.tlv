@@ -41,54 +41,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-// A Stall Pipeline.
-// m4_stall_pipeline(top, name, first_cycle, last_cycle)
-//
-// Transaction logic can be defined externally, and spread across the stall pipeline.
-//
-// Input interface:
-//   |m4_name['']m4first_cycle
-//      @0
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
-//            /trans
-//               $ANY     // input transaction.
-//   |m4_name['']m4_last_cycle
-//      @0
-//         $blocked       // The stall signal.
-// Output signals:
-//   |m4_in_pipe
-//      @0
-//         $blocked       // Identical to the stall signal.
-//   |m4_name['']m4_last_cycle
-//      @0
-//         $trans_avail   // A transaction is available for consumption.
-//         $trans_valid   // The transaction is valid.
-//         ?$trans_valid
-//            /trans
-//               $ANY
-//
-m4_define_plus(['m4_stall_pipeline'], ['
-m4_pushdef(['m4_top'],         ['$5'])
-m4_pushdef(['m4_name'],        ['$6'])
-m4_pushdef(['m4_first_cycle'], ['$7'])
-m4_pushdef(['m4_last_cycle'],  ['$8'])
-
-'], m4___file__, m4___line__, ['m4_dnl
-m4_forloop(['m4_cycle'], m4_first_cycle, m4_last_cycle, ['
-   m4_stall_stage(['$1   '], ']']m4___file__['[', ']']m4___line__['[', ['m4_['']stall_stage(...)'], m4_top, m4_name['']m4_cycle, 0, m4_name['']m4_eval(m4_cycle + 1), 0)'])
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_name'])
-m4_popdef(['m4_first_cycle'])
-m4_popdef(['m4_last_cycle'])
-'])
-
-
-
-
 
 // ==========================================================
 //
@@ -421,6 +373,39 @@ m4_popdef(['m4_out_stage'])
                $ANY = |_out_pipe/trans_hold$ANY;
 
 
+// A Stall Pipeline.
+// m4_stall_pipeline(top, name, first_cycle, last_cycle)
+//
+// Transaction logic can be defined externally, and spread across the stall pipeline.
+//
+// Input interface:
+//   |m4_name['']m4first_cycle
+//      @0
+//         $trans_avail   // A transaction is available for consumption.
+//         ?trans_valid = $trans_avail && ! $blocked
+//            /trans
+//               $ANY     // input transaction.
+//   |m4_name['']m4_last_cycle
+//      @0
+//         $blocked       // The stall signal.
+// Output signals:
+//   |m4_in_pipe
+//      @0
+//         $blocked       // Identical to the stall signal.
+//   |m4_name['']m4_last_cycle
+//      @0
+//         $trans_avail   // A transaction is available for consumption.
+//         $trans_valid   // The transaction is valid.
+//         ?$trans_valid
+//            /trans
+//               $ANY
+//
+
+
+
+\TLV stall_pipeline(/_top,|_name,@_first_cycle,@_last_cycle)
+m4_forloop(['m4_cycle'], m4_first_cycle, m4_last_cycle, ['
+   m4+stall_stage( /_top, |_name['']m4_cycle, @0, |m4_name['']m4_eval(m4_cycle + 1), @0)'])
 
 
 // Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
