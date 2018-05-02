@@ -1,4 +1,3 @@
-m4_hide(['
 /*
 Copyright (c) 2014, Intel Corporation
 
@@ -168,10 +167,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //         $trans_avail   // A transaction is available for consumption.
 \TLV bp_pipeline(|_name, @_input_stage, @_output_stage)
    m4_forloop(['m4_stage'], m4_incr(@_input_stage), @_output_stage, ['
-   m4+bp_stage(/top, ']|_name['['']m4_decr(m4_stage), 1, ']|_name['['']m4_stage, 1)
+   m4+bp_stage(']/top[', ']|_name['['']m4_decr(m4_stage), 1, ']|_name['['']m4_stage, 1)
    '])
-
-
 
 // ==========================================================
 //
@@ -259,24 +256,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //            /trans
 //               $ANY
 //
-m4_define_plus(['m4_stall_pipeline'], ['
-m4_pushdef(['m4_top'],         ['$5'])
-m4_pushdef(['m4_name'],        ['$6'])
-m4_pushdef(['m4_first_cycle'], ['$7'])
-m4_pushdef(['m4_last_cycle'],  ['$8'])
-
-'], m4___file__, m4___line__, ['m4_dnl
-m4_forloop(['m4_cycle'], m4_first_cycle, m4_last_cycle, ['
-   m4_stall_stage(['$1   '], ']']m4___file__['[', ']']m4___line__['[', ['m4_['']stall_stage(...)'], m4_top, m4_name['']m4_cycle, 0, m4_name['']m4_eval(m4_cycle + 1), 0)'])
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_name'])
-m4_popdef(['m4_first_cycle'])
-m4_popdef(['m4_last_cycle'])
-'])
-
+\TLV stall_pipeline(/_top,|_name,#_first_cycle,#_last_cycle)
+   /*
+   DEBUG: stall_pipeline(/_top,|_name,#_first_cycle,#_last_cycle)
+   */
+   m4_forloop(['m4_cycle'], #_first_cycle, #_last_cycle, ['
+   m4+stall_stage(']/_top[', ']|_name['['']m4_cycle, @0, ']|_name['['']m4_eval(m4_cycle + 1), @0)
+   '])
+   
 
 
 
@@ -320,29 +307,11 @@ m4_popdef(['m4_last_cycle'])
 //         $trans_avail   // A transaction is available for consumption.
 //         ?trans_valid   // $trans_avail && ! $blocked
 //            $ANY        // Output transaction
-m4_define_plus(['m4_self_cycle'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_stage'],  ['$7'])
-m4_pushdef(['m4_mid_pipe'],  ['$8'])
-m4_pushdef(['m4_mid_stage'], ['$9'])
-m4_pushdef(['m4_out_pipe'],  ['$10'])
-m4_pushdef(['m4_out_stage'], ['$11'])
 
-'], m4___file__, m4___line__, ['
-m4_bp_stage(m4_top, m4_in_pipe,  m4_in_stage,           m4_mid_pipe, m4_mid_stage, ['$1'], 1, 0)  // Not sure indentation is passed right.
-m4_bp_stage(m4_top, m4_mid_pipe, m4_decr(m4_mid_stage), m4_out_pipe, m4_out_stage, ['$1'], 0, 1)
-'],
+\TLV self_cycle(/_top,|_in_pipe,@_in_stage,|_mid_pipe,@_mid_stage,|_out_pipe,@_out_stage)
+   m4+bp_stage(/_top, |_in_pipe,  @_in_stage,           |_mid_pipe, @_mid_stage, 1, 0)  // Not sure indentation is passed right.
+   m4+bp_stage(/_top, |_mid_pipe, m4_decr(@_mid_stage), |_out_pipe, @_out_stage, 0, 1)
 
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_stage'])
-m4_popdef(['m4_mid_pipe'])
-m4_popdef(['m4_mid_stage'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_stage'])
-'])
 
 
 // A SELF pipeline.
@@ -381,36 +350,15 @@ m4_popdef(['m4_out_stage'])
 //   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
 //      @1
 //         $trans_avail   // A transaction is available for consumption.
-m4_define_plus(['m4_self_pipeline'], ['
-m4_pushdef(['m4_top'],         ['$5'])
-m4_pushdef(['m4_name'],        ['$6'])
-m4_pushdef(['m4_in_pipe'],     ['$7'])
-m4_pushdef(['m4_in_stage'],    ['$8'])
-m4_pushdef(['m4_first_phase'], ['$9'])
-m4_pushdef(['m4_last_phase'],  ['$10'])
-m4_pushdef(['m4_out_pipe'],    ['$11'])
-m4_pushdef(['m4_out_stage'],   ['$12'])
+\TLV self_pipeline (/_top,|_name,|_in_pipe,@_in_stage,@_first_phase,@_last_phase,|_out_pipe,@_out_stage)
+   m4_forloop(['m4_cycle'], 0, m4_eval((@_last_phase - @_first_phase) / 2), ['
+   m4_define(['m4_phase'], m4_eval(@_first_phase + (m4_cycle * 2)))
+   m4_define(['m4_in_p'], m4_ifelse(m4_cycle, 0, |_in_pipe,  |_name['']m4_decr(m4_phase)))
+   m4_define(['m4_in_s'], m4_ifelse(m4_cycle, 0, @_in_stage, 1))
+   m4_define(['m4_out_p'], m4_ifelse(m4_ifelse(|_out_pipe, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), |_out_pipe, |_name['']m4_incr(m4_phase)))
+   m4_define(['m4_out_s'], m4_ifelse(m4_ifelse(@_out_stage, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), @_out_stage, 1))
+   m4_self_cycle(/_top, m4_in_p, m4_in_s,|_name['']m4_phase, 1, m4_out_p, m4_out_s)'])
 
-'], m4___file__, m4___line__, ['
-m4_forloop(['m4_cycle'], 0, m4_eval((m4_last_phase - m4_first_phase) / 2), ['
-m4_define(['m4_phase'], m4_eval(m4_first_phase + (m4_cycle * 2)))
-m4_define(['m4_in_p'], m4_ifelse(m4_cycle, 0, m4_in_pipe,  m4_name['']m4_decr(m4_phase)))
-m4_define(['m4_in_s'], m4_ifelse(m4_cycle, 0, m4_in_stage, 1))
-m4_define(['m4_out_p'], m4_ifelse(m4_ifelse(m4_out_pipe, , NO_MATCH, )m4_cycle, m4_eval((m4_last_phase - m4_first_phase) / 2), m4_out_pipe, m4_name['']m4_incr(m4_phase)))
-m4_define(['m4_out_s'], m4_ifelse(m4_ifelse(m4_out_stage, , NO_MATCH, )m4_cycle, m4_eval((m4_last_phase - m4_first_phase) / 2), m4_out_stage, 1))
-m4_self_cycle(['$1'], ']']m4___file__['[', ']']m4___line__['[', ['m4_['']self_cycle(...)'], m4_top, m4_in_p, m4_in_s, m4_name['']m4_phase, 1, m4_out_p, m4_out_s)
-'])'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_name'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_stage'])
-m4_popdef(['m4_first_phase'])
-m4_popdef(['m4_last_phase'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_stage'])
-'])
 
 
 
@@ -470,6 +418,9 @@ m4_popdef(['m4_out_stage'])
 //
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
 
+
+
+
 m4_unsupported(['m4_flop_fifo'], 1)
 \TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_high_water)
    m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
@@ -485,7 +436,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
    |_in_pipe
       /entry[(#_depth)-1:0]
    |_out_pipe
-      /entry[(#_depth
+      /entry[(#_depth)-1:0]
    |_in_pipe
       @_in_at
          $out_blocked = /_top|_out_pipe>>m4_bypass_align$blocked;
@@ -519,11 +470,11 @@ m4_unsupported(['m4_flop_fifo'], 1)
                                                : >>1$reconstructed_is_tail;  // retain tail
             $state = |_in_pipe$reset ? 1'b0
                                        : $valid && ! (|_in_pipe$two_valid && $is_tail);
-      @m4_eval(@_in_at + 1)
+      @m4_stage_eval(@_in_at>>1)
          $empty = ! $two_valid && ! $valid_count[0];
          $full = ($valid_count == full_mark_['']m4_plus_inst_id);  // Could optimize for power-of-two depth.
       /entry[*]
-         @m4_eval(@_in_at + 1)
+         @m4_stage_eval(@_in_at>>1)
             $prev_entry_state = /entry[(entry+(#_depth)-1)%(#_depth)]$state;
             $next_entry_state = /entry[(entry+1)%(#_depth)]$state;
             $reconstructed_is_tail = (  /_top|_in_pipe$two_valid && (!$state && $prev_entry_state)) ||
@@ -538,7 +489,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
                //?$push
                //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
             /_trans_hier
-m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
+ m4_trans_ind           $ANY = /entry$push ? /_top|_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
       // Read data
    |_out_pipe
       @_out_at
@@ -548,36 +499,39 @@ m4_trans_ind            $ANY = /entry$push ? /m4_top|m4_in_pipe['']/_trans_hier$
             $pop  = $is_head && ! |_out_pipe$blocked;
             /read_masked
                /_trans_hier
-m4_trans_ind               $ANY = /entry$is_head ? /_top|_in_pipe/entry['']/_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
+ m4_trans_ind              $ANY = /entry$is_head ? /_top|_in_pipe/entry['']/_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
             /accum
                /_trans_hier
-m4_trans_ind               $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans_hier$ANY) |
+ m4_trans_ind              $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans_hier$ANY) |
                              /entry/read_masked['']/_trans_hier$ANY;
          /head
             $trans_avail = |_out_pipe$trans_avail;
             ?$trans_avail
-                /_trans_hier
-m4_trans_ind               $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans_hier$ANY;
-      // Bypass
-      |_out_pipe
-         @_out_at
-            // Available output.  Sometimes it's necessary to know what would be coming to determined
-            // if it's blocked.  This can be used externally in that case.
-            /fifo_head
-               $trans_avail = |_out_pipe$trans_avail;
-               ?$trans_avail
-                  /_trans_hier
-m4_trans_ind               $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
-m4_trans_ind                            ? /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY
-m4_trans_ind                            : |_out_pipe/head['']/_trans_hier$ANY;
+               /_trans_hier
+ m4_trans_ind              $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans_hier$ANY;
+   // Bypass
+   |_out_pipe
+      @_out_at
+         // Available output.  Sometimes it's necessary to know what would be coming to determined
+         // if it's blocked.  This can be used externally in that case.
+         /fifo_head
+            $trans_avail = |_out_pipe$trans_avail;
+            ?$trans_avail
+               /_trans_hier
+ m4_trans_ind              $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
+ m4_trans_ind                           ? /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY
+ m4_trans_ind                           : |_out_pipe/head['']/_trans_hier$ANY;
          $trans_avail = ! /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass || /_top|_in_pipe>>m4_reverse_bypass_align$trans_avail;
          $trans_valid = $trans_avail && ! $blocked;
          ?$trans_valid
             /_trans_hier
-m4_trans_ind            $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
+ m4_trans_ind           $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
 
-   
-
+m4_popdef(['m4_ptr_width'])
+m4_popdef(['m4_counter_width'])
+m4_popdef(['m4_bypass_align'])
+m4_popdef(['m4_reverse_bypass_align'])
+m4_popdef(['m4_trans_ind'])
    /* Alternate code for pointer indexing.  Replaces $ANY expression above.
 
    // Hierarchy
@@ -729,126 +683,93 @@ m4_trans_ind            $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
 // for input and output and must consider per-VC backpressure; $trans_avail is not produced on
 // output and should not be assigned externally for input.
 //
-m4_unsupported(['m4_vc_flop_fifo'], 1)
-m4_define_plus(['m4_vc_flop_fifo_v2'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_at'],     ['$7'])
-m4_pushdef(['m4_out_pipe'],  ['$8'])
-m4_pushdef(['m4_out_at'],    ['$9'])
-m4_pushdef(['m4_depth'],     ['$10'])
-m4_pushdef(['m4_trans_hier'],['$11'])
-m4_pushdef(['m4_vc_range'],  ['$12'])
-m4_pushdef(['m4_prio_range'],['$13'])
-m4_pushdef(['m4_bypass_at'], ['$14'])   // By default, m4_out_at, or can be the cycle before, in which case inputs and outputs are in the previous cycle.
-m4_pushdef(['m4_high_water'],['$15'])
 
-m4_define(['m4_bypass_at'], m4_ifelse(m4_bypass_at, [''], ['m4_out_at'], ['m4_bypass_at']))
-m4_pushdef(['m4_arb_at'], m4_eval(m4_out_at - 1))  // Arb and read VC FIFOs the stage before m4_out_at.
-m4_pushdef(['m4_bypass_align'], m4_align(m4_out_at, m4_in_at))
-m4_pushdef(['m4_reverse_bypass_align'], m4_align(m4_in_at, m4_out_at))
-m4_pushdef(['m4_trans_ind'], m4_ifelse(m4_trans_hier, [''], [''], ['   ']))
+ m4_unsupported(['m4_vc_flop_fifo'], 1)
+\TLV vc_flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_vc_range,#_prio_range,@_bypass_at,#_high_water)
 
-'], m4___file__, m4___line__, ['
-   /vc[m4_vc_range]
-      |m4_in_pipe
-         @m4_in_at
+   m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at, [''], ['@_out_at'], ['@_bypass_at']))
+   m4_pushdef(['m4_arb_at'], m4_eval(@_out_at - 1))  // Arb and read VC FIFOs the stage before m4_out_at.
+   m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
+   m4_pushdef(['m4_reverse_bypass_align'], m4_align(@_in_at, @_out_at))
+   m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans_hier, [''], [''], ['   ']))
+   /vc[#_vc_range]
+      |_in_pipe
+         @_in_at
             // Apply inputs to the right VC FIFO.
             //
-
-            $reset = /m4_top|m4_in_pipe$reset;
-            $trans_valid = $vc_trans_valid && ! /vc|m4_out_pipe>>m4_bypass_align$bypassed_fifos_for_this_vc;
+            $reset = /_top|_in_pipe$reset;
+            $trans_valid = $vc_trans_valid && ! /vc|_out_pipe>>m4_bypass_align$bypassed_fifos_for_this_vc;
             $trans_avail = $trans_valid;
             ?$trans_valid
-               m4_trans_hier
-m4_trans_ind               $ANY = /m4_top|m4_in_pipe['']m4_trans_hier$ANY;
+               /_trans_hier
+ m4_trans_ind              $ANY = /_top|_in_pipe['']/_trans_hier$ANY;
       // Instantiate FIFO.  Output to stage (m4_out_at - 1) because bypass is m4_out_at.
-      m4_flop_fifo_v2(['      $1'], ']m4___file__[', ']m4___line__[', ['m4_['']flop_fifo_v2(...)'], vc, m4_in_pipe, m4_in_at, m4_out_pipe, m4_arb_at, m4_depth, m4_trans_hier, m4_high_water)
+      m4+flop_fifo_v2( |_in_pipe, @_in_at, |_out_pipe, @_arb_at, #_depth, /_trans_hier, #_high_water)
 
    // FIFO select.
    //
    /vc[*]
-      |m4_out_pipe
-         @m4_arb_at
+      |_out_pipe
+         @_arb_at
             $arbing = $trans_avail && $has_credit;
-            /prio[m4_prio_range]
+            /prio[#_prio_range]
                // Decoded priority.
                >>1$Match = #prio == |m4_out_pipe$Prio;
             // Mask of same-prio VCs.
-            /other_vc[m4_vc_range]
-               >>1$SamePrio = |m4_out_pipe$Prio == /vc[#other_vc]|m4_out_pipe$Prio;
+            /other_vc[#_vc_range]
+               >>1$SamePrio = |_out_pipe$Prio == /vc[#other_vc]|_out_pipe$Prio;
                // Select among same-prio VCs.
-               $competing = $SamePrio && /vc[#other_vc]|m4_out_pipe$arbing;
+               $competing = $SamePrio && /vc[#other_vc]|_out_pipe$arbing;
             // Select FIFO if selected within priority and this VC has the selected (max available) priority.
-            $fifo_sel = m4_am_max(/other_vc[*]$competing, vc) && | (/prio[*]$Match & /m4_top/prio[*]|m4_out_pipe$sel);
+            $fifo_sel = m4_am_max(/other_vc[*]$competing, vc) && | (/prio[*]$Match & /_top/prio[*]|_out_pipe$sel);
                // TODO: Need to replace m4_am_max with round-robin within priority.
             $blocked = ! $fifo_sel;
-         @m4_bypass_at
+         @_bypass_at
             // Can bypass FIFOs?
-            $can_bypass_fifos_for_this_vc = /vc|m4_in_pipe>>m4_reverse_bypass_align$vc_trans_valid &&
-                                            /vc|m4_in_pipe>>m4_align(m4_eval(m4_in_at+1), m4_out_at)$empty &&
+            $can_bypass_fifos_for_this_vc = /vc|_in_pipe>>m4_reverse_bypass_align$vc_trans_valid &&
+                                            /vc|_in_pipe>>m4_align(m4_eval(@_in_at+1), @_out_at)$empty &&
                                             $has_credit;
 
             // Indicate output VC as per-VC FIFO output $trans_valid or could bypass in this VC.
-            $bypassed_fifos_for_this_vc = $can_bypass_fifos_for_this_vc && ! /m4_top|m4_out_pipe$fifo_trans_avail;
+            $bypassed_fifos_for_this_vc = $can_bypass_fifos_for_this_vc && ! /_top|_out_pipe$fifo_trans_avail;
             $vc_trans_valid = $trans_valid || $bypassed_fifos_for_this_vc;
             `BOGUS_USE($vc_trans_valid)  // okay to not consume this
-   /prio[m4_prio_range]
-      |m4_out_pipe
-         @m4_arb_at
-            /vc[m4_vc_range]
+   /prio[#_prio_range]
+      |_out_pipe
+         @_arb_at
+            /vc[#_vc_range]
                // Trans available for this prio/VC?
-               $avail_within_prio = /m4_top/vc|m4_out_pipe$trans_avail &&
-                                    /m4_top/vc|m4_out_pipe/prio$Match;
+               $avail_within_prio = /_top/vc|_out_pipe$trans_avail &&
+                                    /_top/vc|_out_pipe/prio$Match;
             // Is this priority available in FIFOs.
             $avail = | /vc[*]$avail_within_prio;
             // Select this priority if its the max available.
-            $sel = m4_am_max(/prio[*]|m4_out_pipe$avail, prio);
+            $sel = m4_am_max(/prio[*]|_out_pipe$avail, prio);
 
-   |m4_out_pipe
-      @m4_arb_at
-         $fifo_trans_avail = | /m4_top/vc[*]|m4_out_pipe$arbing;
+   |_out_pipe
+      @_arb_at
+         $fifo_trans_avail = | /_top/vc[*]|_out_pipe$arbing;
          /fifos_out
-            $fifo_trans_avail = |m4_out_pipe$fifo_trans_avail;
-            /vc[m4_vc_range]
-            m4_select(['            $1'], ']m4___file__[', ']m4___line__[', ['m4_['']select(...)'], $ANY, /m4_top, /vc, |m4_out_pipe['']m4_trans_hier, |m4_out_pipe, $fifo_sel, $ANY, $fifo_trans_avail)
+            $fifo_trans_avail = |_out_pipe$fifo_trans_avail;
+            /vc[#_vc_range]
+            m4+select( $ANY, /_top, /vc, |_out_pipe['']/_trans_hier, |_out_pipe, $fifo_sel, $ANY, $fifo_trans_avail)
 
          // Output transaction
          //
 
-      @m4_bypass_at
+      @_bypass_at
          // Incorporate bypass
          // Bypass if there's no transaction from the FIFOs, and the incoming transaction is okay for output.
-         $can_bypass_fifos = | /m4_top/vc[*]|m4_out_pipe$can_bypass_fifos_for_this_vc;
+         $can_bypass_fifos = | /_top/vc[*]|_out_pipe$can_bypass_fifos_for_this_vc;
          $trans_valid = $fifo_trans_avail || $can_bypass_fifos;
          ?$trans_valid
-            m4_trans_hier
-m4_trans_ind            $ANY = |m4_out_pipe$fifo_trans_avail ? |m4_out_pipe/fifos_out$ANY : /m4_top|m4_in_pipe['']m4_trans_hier>>m4_reverse_bypass_align$ANY;
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_at'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_at'])
-m4_popdef(['m4_depth'])
-m4_popdef(['m4_trans_hier'])
-m4_popdef(['m4_vc_range'])
-m4_popdef(['m4_prio_range'])
-m4_popdef(['m4_bypass_at'])
-m4_popdef(['m4_high_water'])
+            /_trans_hier
+ m4_trans_ind           $ANY = |_out_pipe$fifo_trans_avail ? |_out_pipe/fifos_out$ANY : /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY;
 
 m4_popdef(['m4_arb_at'])
 m4_popdef(['m4_bypass_align'])
 m4_popdef(['m4_reverse_bypass_align'])
 m4_popdef(['m4_trans_ind'])
-'])
-
-
-
-
-
 // Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
 // from previous stages of /_scope any contain a $_valid $_src_tag matching $_tag, or /_top/no_bypass$_value otherwise.
 \TLV bypass(/_top, #_cycles, /_scope, $_valid, $_src_tag, $_src_value, $_tag)
@@ -904,71 +825,46 @@ m4_popdef(['m4_trans_ind'])
 //               $ANY        // Output transaction
 
 
-m4_define_plus(['m4_simple_ring'], ['
 
-m4_pushdef(['m4_hop'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_in_at'],     ['$7'])
-m4_pushdef(['m4_out_pipe'],  ['$8'])
-m4_pushdef(['m4_out_at'],    ['$9'])
-m4_pushdef(['m4_reset_scope'],['$10'])
-m4_pushdef(['m4_reset_at'],  ['$11'])
-m4_pushdef(['m4_reset_sig'], ['$12'])
-
-m4_pushdef(['m4_out_in_align'], m4_align(m4_out_at, m4_in_at))
-m4_pushdef(['m4_in_out_align'], m4_align(m4_in_at, m4_out_at))
-
-'], m4___file__, m4___line__, ['
-
+\TLV simple_ring(/_hop,|_in_pipe,@_in_at,|_out_pipe,@_out_at,/_reset_scope,@_reset_at,$_reset_sig)
+   m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
+   m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
    // Logic
-   /m4_hop[*]
+   /_hop[*]
       |default
          @0
             \SV_plus
-               int prev_hop = (m4_hop + RING_STOPS - 1) % RING_STOPS;
-      |m4_in_pipe
-         @m4_in_at
-            $blocked = /m4_hop|rg<>0$passed_on;
+            int prev_hop = (m4_strip_prefix(/_hop) + RING_STOPS - 1) % RING_STOPS;
+      |_in_pipe
+         @_in_at
+            $blocked = /_hop|rg<>0$passed_on;
       |rg
-         @m4_in_at
-            $passed_on = /m4_hop[prev_hop]|rg>>1$pass_on;
-            $valid = ! m4_reset_scope>>m4_align(m4_reset_at, m4_in_at)m4_reset_sig &&
-                     ($passed_on || /m4_hop|m4_in_pipe<>0$trans_avail);
-            $pass_on = $valid && ! /m4_hop|m4_out_pipe>>m4_out_in_align$trans_valid;
+         @_in_at
+            $passed_on = /_hop[prev_hop]|rg>>1$pass_on;
+            $valid = ! /_reset_scope>>m4_align(@_reset_at, @_in_at)$_reset_sig &&
+                     ($passed_on || /_hop|_in_pipe<>0$trans_avail);
+            $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
             $dest[RING_STOPS_WIDTH-1:0] =
                $passed_on
-                  ? /m4_hop[prev_hop]|rg>>1$dest
-                  : /m4_hop|m4_in_pipe<>0$dest;
-         @m4_eval(m4_in_at + 1)
+                  ? /_hop[prev_hop]|rg>>1$dest
+                  : /_hop|_in_pipe<>0$dest;
+         @m4_stage_eval(@_in_at + 1)
             ?$valid
                $ANY =
                   $passed_on
-                     ? /m4_hop[prev_hop]|rg>>1$ANY
-                     : /m4_hop|m4_in_pipe<>0$ANY;
-      |m4_out_pipe
+                     ? /_hop[prev_hop]|rg>>1$ANY
+                     : /_hop|_in_pipe<>0$ANY;
+      |_out_pipe
          // Ring out
-         @m4_out_at
-            $trans_avail = /m4_hop|rg>>m4_in_out_align$valid && (/m4_hop|rg>>m4_in_out_align$dest == m4_hop);
+         @_out_at
+            $trans_avail = /_hop|rg>>m4_in_out_align$valid && (/_hop|rg>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
             $blocked = 1'b0;
             $trans_valid = $trans_avail && ! $blocked;
          ?$trans_valid
             @1
-               $ANY = /m4_hop|rg>>m4_in_out_align$ANY;
-'],
-
-['
-m4_popdef(['m4_hop'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_in_at'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_out_at'])
-m4_popdef(['m4_reset_scope'])
-m4_popdef(['m4_reset_at'])
-m4_popdef(['m4_reset_sig'])
-
+               $ANY = /_hop|rg>>m4_in_out_align$ANY;
 m4_popdef(['m4_out_in_align'])
 m4_popdef(['m4_in_out_align'])
-'])
 
 
 
@@ -994,54 +890,37 @@ m4_popdef(['m4_in_out_align'])
 //             $valid
 //
 
-m4_define_plus(['m4_1cyc_speculate'], ['
-m4_pushdef(['m4_top'],       ['$5'])
-m4_pushdef(['m4_in_pipe'],   ['$6'])
-m4_pushdef(['m4_out_pipe'],  ['$7'])
-m4_pushdef(['m4_spec_stage'],['$8'])  // Stage in which speculation is done.
-m4_pushdef(['m4_comp_stage'],['$9'])  // Stage in which comparison is performed.
-m4_pushdef(['m4_pred_sigs'], ['$10']) // Comma-separated list of predicted signals.
 
-'], m4___file__, m4___line__, ['
-   |m4_in_pipe
+\TLV 1cyc_speculate(/_top,|_in_pipe,|_out_pipe,@_spec_stage,@_comp_stage,$_pred_sigs)
+   |_in_pipe
       ?$valid
-         @m4_spec_stage
+         @_spec_stage
             /trans  // Context for non-speculative calculation.
             /pred_trans  // Context for prediction (speculative transaction).
-               $ANY = |m4_in_pipe/trans$ANY;  // Pass through real calculation by default.
-         @m4_comp_stage
+               $ANY = |_in_pipe/trans$ANY;  // Pass through real calculation by default.
+         @_comp_stage
             /comp
                // Pull speculative signals and actual ones for comparison to
                // determine mispredict.
-               $ANY = |m4_in_pipe/trans$ANY ^ |m4_in_pipe/pred_trans$ANY;
-               $mispred = | {m4_pred_sigs};
-      @m4_comp_stage
+               $ANY = |_in_pipe/trans$ANY ^ |_in_pipe/pred_trans$ANY;
+               $mispred = | {$_pred_sigs};
+      @_comp_stage
          // Unconditioned signal indicating need to delay 1 cycle.
          $delay = $valid && (
                        /comp$mispred ||  // misprediction
                        >>1$delay         // previous was delayed
                     );
-   |m4_out_pipe
+   |_out_pipe
       /trans
-         @m4_spec_stage
+         @_spec_stage
             // Context for transaction post-speculation, timed to correct speculation.
-            $delayed = /m4_top|m4_in_pipe>>1$delay;
+            $delayed = /_top|_in_pipe>>1$delay;
             // Use $maybe_valid as a condition if there isn't time to use $valid.
-            $maybe_valid = /m4_top|m4_in_pipe<>0$valid || $delayed;
+            $maybe_valid = /_top|_in_pipe<>0$valid || $delayed;
             ?$maybe_valid
-               $ANY = $delayed ? /m4_top|m4_in_pipe/trans>>1$ANY : /m4_top|m4_in_pipe/pred_trans<>0$ANY;
-         @m4_comp_stage
-            $valid = (/m4_top|m4_in_pipe<>0$valid && ! /m4_top|m4_in_pipe/comp<>0$mispred) || $delayed;
-'],
-
-['
-m4_popdef(['m4_top'])
-m4_popdef(['m4_in_pipe'])
-m4_popdef(['m4_out_pipe'])
-m4_popdef(['m4_comp_stage'])
-m4_popdef(['m4_pred_sigs'])
-'])
+               $ANY = $delayed ? /_top|_in_pipe/trans>>1$ANY : /_top|_in_pipe/pred_trans<>0$ANY;
+         @_comp_stage
+            $valid = (/_top|_in_pipe<>0$valid && ! /_top|_in_pipe/comp<>0$mispred) || $delayed;
 
 
 
-'])m4_dnl
