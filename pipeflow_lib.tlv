@@ -420,6 +420,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
+
 m4_unsupported(['m4_flop_fifo'], 1)
 \TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans_hier,#_high_water)
    m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
@@ -525,6 +526,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
          ?$trans_valid
             /_trans_hier
  m4_trans_ind           $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
+
 
    /* Alternate code for pointer indexing.  Replaces $ANY expression above.
 
