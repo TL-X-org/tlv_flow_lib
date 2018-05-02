@@ -527,7 +527,11 @@ m4_unsupported(['m4_flop_fifo'], 1)
             /_trans_hier
  m4_trans_ind           $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
 
-
+m4_popdef(['m4_ptr_width'])
+m4_popdef(['m4_counter_width'])
+m4_popdef(['m4_bypass_align'])
+m4_popdef(['m4_reverse_bypass_align'])
+m4_popdef(['m4_trans_ind'])
    /* Alternate code for pointer indexing.  Replaces $ANY expression above.
 
    // Hierarchy
@@ -762,7 +766,10 @@ m4_unsupported(['m4_flop_fifo'], 1)
             /_trans_hier
  m4_trans_ind           $ANY = |_out_pipe$fifo_trans_avail ? |_out_pipe/fifos_out$ANY : /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY;
 
-
+m4_popdef(['m4_arb_at'])
+m4_popdef(['m4_bypass_align'])
+m4_popdef(['m4_reverse_bypass_align'])
+m4_popdef(['m4_trans_ind'])
 // Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
 // from previous stages of /_scope any contain a $_valid $_src_tag matching $_tag, or /_top/no_bypass$_value otherwise.
 \TLV bypass(/_top, #_cycles, /_scope, $_valid, $_src_tag, $_src_value, $_tag)
@@ -856,7 +863,8 @@ m4_unsupported(['m4_flop_fifo'], 1)
          ?$trans_valid
             @1
                $ANY = /_hop|rg>>m4_in_out_align$ANY;
-
+m4_popdef(['m4_out_in_align'])
+m4_popdef(['m4_in_out_align'])
 
 
 
