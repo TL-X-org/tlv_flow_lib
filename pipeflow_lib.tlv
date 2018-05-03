@@ -257,9 +257,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //               $ANY
 //
 \TLV stall_pipeline(/_top,|_name,#_first_cycle,#_last_cycle)
-   /*
-   DEBUG: stall_pipeline(/_top,|_name,#_first_cycle,#_last_cycle)
-   */
+
    m4_forloop(['m4_cycle'], #_first_cycle, #_last_cycle, ['
    m4+stall_stage(']/_top[', ']|_name['['']m4_cycle, @0, ']|_name['['']m4_eval(m4_cycle + 1), @0)
    '])
@@ -352,18 +350,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //         $trans_avail   // A transaction is available for consumption.
 \TLV self_pipeline (/_top,|_name,|_in_pipe,@_in_stage,@_first_phase,@_last_phase,|_out_pipe,@_out_stage)
    m4_forloop(['m4_cycle'], 0, m4_eval((@_last_phase - @_first_phase) / 2), ['
-   m4_define(['m4_phase'], m4_eval(@_first_phase + (m4_cycle * 2)))
-   m4_define(['m4_in_p'], m4_ifelse(m4_cycle, 0, |_in_pipe,  |_name['']m4_decr(m4_phase)))
-   m4_define(['m4_in_s'], m4_ifelse(m4_cycle, 0, @_in_stage, 1))
-   m4_define(['m4_out_p'], m4_ifelse(m4_ifelse(|_out_pipe, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), |_out_pipe, |_name['']m4_incr(m4_phase)))
-   m4_define(['m4_out_s'], m4_ifelse(m4_ifelse(@_out_stage, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), @_out_stage, 1))
+   m4_pushdef(['m4_phase'], m4_eval(@_first_phase + (m4_cycle * 2)))
+   m4_pushdef(['m4_in_p'], m4_ifelse(m4_cycle, 0, |_in_pipe,  |_name['']m4_decr(m4_phase)))
+   m4_pushdef(['m4_in_s'], m4_ifelse(m4_cycle, 0, @_in_stage, 1))
+   m4_pushdef(['m4_out_p'], m4_ifelse(m4_ifelse(|_out_pipe, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), |_out_pipe, |_name['']m4_incr(m4_phase)))
+   m4_pushdef(['m4_out_s'], m4_ifelse(m4_ifelse(@_out_stage, , NO_MATCH, )m4_cycle, m4_eval((@_last_phase - @_first_phase) / 2), @_out_stage, 1))
    m4_self_cycle(/_top, m4_in_p, m4_in_s,|_name['']m4_phase, 1, m4_out_p, m4_out_s)'])
 
-
-
-
-
-
+m4_popdef(['m4_phase'])
+m4_popdef(['m4_in_p'])
+m4_popdef(['m4_in_s'])
+m4_popdef(['m4_in_s'])
 // A simple flop-based FIFO with entry-granular clock gating.
 // Note: Simulation is less efficient due to the explicit clock gating.
 //
