@@ -119,8 +119,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                         // place of recirculation.
             /_trans_hier
  m4_trans_ind           $ANY =
- m4_trans_ind              >>1$recirc ? >>1$ANY
- m4_trans_ind                         : /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage - 1)$ANY;
+ m4_trans_ind              |_out_pipe>>1$recirc ? >>1$ANY
+ m4_trans_ind                         : /_top|_in_pipe/_trans_hier>>m4_align(@_in_stage, @_out_stage - 1)$ANY;
       @m4_stage_eval(@_out_stage - m4_b_latch)['']m4_post_latch_phase
          $recirc = $trans_avail && $blocked;  // Available transaction that is blocked; must recirc.
          // A valid for external transaction processing.
@@ -367,7 +367,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_popdef(['m4_phase'])
    m4_popdef(['m4_in_p'])
    m4_popdef(['m4_in_s'])
-   m4_popdef(['m4_in_s'])'])
+   m4_popdef(['m4_out_p'])
+   m4_pushdef(['m4_out_s'])
    
 
 // A simple flop-based FIFO with entry-granular clock gating.
@@ -914,8 +915,8 @@ m4_popdef(['m4_trans_ind'])
          @_comp_stage
             /comp
                /_trans_hier
-               // Pull speculative signals and actual ones for comparison to
-               // determine mispredict.
+ m4_trans_ind              // Pull speculative signals and actual ones for comparison to
+ m4_trans_ind              // determine mispredict.
  m4_trans_ind              $ANY = |_in_pipe/trans$ANY ^ |_in_pipe/pred_trans$ANY;
                $mispred = | {$_pred_sigs};
       @_comp_stage
