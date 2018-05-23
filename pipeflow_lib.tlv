@@ -799,7 +799,7 @@ m4_popdef(['m4_trans_ind'])
 // m4_simple_ring(hop, in_pipe, in_stage, out_pipe, out_stage, reset_scope, reset_stage, reset_sig)
 //   hop:                   The name of the beh hier for a ring hop/stop.
 //   [in/out]_[pipe/stage]: The pipeline name and stage of the input and output for the control logic
-//                          in each hop.
+//                          in each hop. (Data is a cycle behind.)
 //   reset_[scope/stage/sig]: The fully qualified reset signal and stage.
 //
 // Input interface:
@@ -871,7 +871,7 @@ m4_popdef(['m4_trans_ind'])
             $blocked = 1'b0;
             $trans_valid = $trans_avail && ! $blocked;
          ?$trans_valid
-            @1
+            @m4_stage_eval(@_out_at + 1)
                /_trans_hier
  m4_trans_ind              $ANY = /_hop|rg>>m4_in_out_align$ANY;
 m4_popdef(['m4_out_in_align'])
