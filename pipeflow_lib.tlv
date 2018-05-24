@@ -50,6 +50,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
+// Create a version of a pipeline whose contents are unconditioned.
+// This is useful for phase-based logic which isn't fully ironed-out yet, and currently
+// requires clock enables to be driven a cycle before they the consuming clock edge.
+// This macro can be used to uncondition the input transaction to phase-based flow logic.
+\TLV uncondition_pipeline_trans(/_top, |_in_pipe, @_in_at, /_trans_hier)
+   |_in_pipe
+      @_in_at
+         $ANY = /_top|fifo_out_unconditioned<>0$ANY;
+   |_in_pipe[]_unconditioned
+      @_in_at
+         $ANY = /_top|fifo_out<>0$ANY;
+         /_trans_hier
+         m4_ifelse(/_trans_hier, [''], [''], ['   ']$ANY = /_top|fifo_out/_trans_hier<>0$ANY;)
+
+
+
 // A backpressured flop stage.
 // m4_bp_stage(top, in_pipe, in_stage, out_pipe, out_stage[, indentation_str, b_latch, a_latch])
 //
