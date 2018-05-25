@@ -833,7 +833,7 @@ m4_popdef(['m4_trans_ind'])
 
 
 
-\TLV simple_ring(/_hop,|_in_pipe,@_in_at,|_out_pipe,@_out_at,/_reset_scope,@_reset_at,$_reset_sig,/_trans_hier)
+\TLV simple_ring(/_hop,|_in_pipe,@_in_at,|_out_pipe,@_out_at,/_reset_scope,@_reset_at,$_reset_sig,|_name,/_trans_hier)
    m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans_hier, [''], [''], ['   ']))
@@ -846,38 +846,37 @@ m4_popdef(['m4_trans_ind'])
             int prev_hop = (m4_strip_prefix(/_hop) + RING_STOPS - 1) % RING_STOPS;
       |_in_pipe
          @_in_at
-            $blocked = /_hop|rg<>0$passed_on;
-      |rg
+            $blocked = /_hop|_name<>0$passed_on;
+      |_name
          @_in_at
-            $passed_on = /_hop[prev_hop]|rg>>1$pass_on;
+            $passed_on = /_hop[prev_hop]|_name>>1$pass_on;
             $valid = ! /_reset_scope>>m4_align(@_reset_at, @_in_at)$_reset_sig &&
                      ($passed_on || /_hop|_in_pipe<>0$trans_avail);
             $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
             $dest[RING_STOPS_WIDTH-1:0] =
                $passed_on
-                  ? /_hop[prev_hop]|rg>>1$dest
+                  ? /_hop[prev_hop]|_name>>1$dest
                   : /_hop|_in_pipe<>0$dest;
          @m4_stage_eval(@_in_at + 1)
             ?$valid
                /_trans_hier
             m4_trans_ind   $ANY =
             m4_trans_ind     $passed_on
-            m4_trans_ind         ? /_hop[prev_hop]|rg>>1$ANY
+            m4_trans_ind         ? /_hop[prev_hop]|_name>>1$ANY
             m4_trans_ind         : /_hop|_in_pipe<>0$ANY;
       |_out_pipe
          // Ring out
          @_out_at
-            $trans_avail = /_hop|rg>>m4_in_out_align$valid && (/_hop|rg>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
+            $trans_avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
             $blocked = 1'b0;
             $trans_valid = $trans_avail && ! $blocked;
          ?$trans_valid
             @1
                /_trans_hier
-            m4_trans_ind   $ANY = /_hop|rg>>m4_in_out_align$ANY;
+            m4_trans_ind   $ANY = /_hop|_name>>m4_in_out_align$ANY;
 m4_popdef(['m4_out_in_align'])
 m4_popdef(['m4_in_out_align'])
 m4_popdef(['m4_trans_ind'])
-
 
 
 // A one-cycle speculation flow.
