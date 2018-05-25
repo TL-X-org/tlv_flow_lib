@@ -938,3 +938,18 @@ m4_popdef(['m4_trans_ind'])
             $valid = (/_top|_in_pipe<>0$valid && ! /_top|_in_pipe/comp<>0$mispred) || $delayed;
    m4_popdef(['m4_trans_ind'])
 
+\TLV arb(/_top_in1,/_top_in2,|_in1,|_in2,|_arb_out)
+   |_arb_out
+      @0
+         // bypass if pipe1 does not have a valid transaction and FIFO does
+         // and packet's destination is same as ring_stop
+         $bypass = !(/_top_in1|_in1>>1$trans_valid) &&
+                   /_top_in2|_in2>>1$trans_valid &&
+                   /_top_in2|_in2/trans>>1$dest == ring_stop;
+         $trans_valid = $bypass ||
+                        /_top_in1|_in1>>1$trans_valid;
+         ?$trans_valid
+            /trans
+               $ANY = |_arb_out$bypass ? /_top_in2|_in2/trans>>1$ANY :
+                                        /_top_in1|_in1/trans>>1$ANY;
+      
