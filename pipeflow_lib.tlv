@@ -118,9 +118,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          ?$trans_avail  // Physically, $first_avail && *reset_b for functional gating in
                         // place of recirculation.
             /_trans_hier
- m4_trans_ind           $ANY =
- m4_trans_ind              |_out_pipe>>1$recirc ? >>1$ANY
- m4_trans_ind                         : /_top|_in_pipe/_trans_hier>>m4_align(@_in_stage, @_out_stage - 1)$ANY;
+         m4_trans_ind   $ANY =
+         m4_trans_ind      |_out_pipe>>1$recirc ? >>1$ANY
+         m4_trans_ind                 : /_top|_in_pipe/_trans_hier>>m4_align(@_in_stage, @_out_stage - 1)$ANY;
       @m4_stage_eval(@_out_stage - m4_b_latch)['']m4_post_latch_phase
          $recirc = $trans_avail && $blocked;  // Available transaction that is blocked; must recirc.
          // A valid for external transaction processing.
@@ -226,11 +226,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          ?$trans_valid
             /trans_hold
                /_trans_hier
-  m4_trans_ind             $ANY = |_out_pipe$blocked ? >>1$ANY : /_top|_in_pipe/trans/_trans_hier>>1$ANY;
+            m4_trans_ind   $ANY = |_out_pipe$blocked ? >>1$ANY : /_top|_in_pipe/trans/_trans_hier>>1$ANY;
          ?$trans_avail
             /trans
                /_trans_hier
-  m4_trans_ind             $ANY = |_out_pipe/trans_hold/_trans_hier$ANY;
+            m4_trans_ind   $ANY = |_out_pipe/trans_hold/_trans_hier$ANY;
    m4_popdef(['m4_trans_ind'])
 
 
@@ -496,7 +496,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
                //?$push
                //   $aNY = |m4_in_pipe['']m4_trans_hier$ANY;
             /_trans_hier
- m4_trans_ind           $ANY = /entry$push ? /_top|_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
+         m4_trans_ind   $ANY = /entry$push ? /_top|_in_pipe['']/_trans_hier$ANY : >>1$ANY /* RETAIN */;
       // Read data
    |_out_pipe
       @_out_at
@@ -506,16 +506,16 @@ m4_unsupported(['m4_flop_fifo'], 1)
             $pop  = $is_head && ! |_out_pipe$blocked;
             /read_masked
                /_trans_hier
- m4_trans_ind              $ANY = /entry$is_head ? /_top|_in_pipe/entry['']/_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
+            m4_trans_ind   $ANY = /entry$is_head ? /_top|_in_pipe/entry['']/_trans_hier>>m4_align(@_in_at + 1, @_out_at)$ANY /* $aNY */ : '0;
             /accum
                /_trans_hier
- m4_trans_ind              $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans_hier$ANY) |
+            m4_trans_ind   $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans_hier$ANY) |
                              /entry/read_masked['']/_trans_hier$ANY;
          /head
             $trans_avail = |_out_pipe$trans_avail;
             ?$trans_avail
                /_trans_hier
- m4_trans_ind              $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans_hier$ANY;
+            m4_trans_ind   $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans_hier$ANY;
    // Bypass
    |_out_pipe
       @_out_at
@@ -525,14 +525,14 @@ m4_unsupported(['m4_flop_fifo'], 1)
             $trans_avail = |_out_pipe$trans_avail;
             ?$trans_avail
                /_trans_hier
- m4_trans_ind              $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
- m4_trans_ind                           ? /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY
- m4_trans_ind                           : |_out_pipe/head['']/_trans_hier$ANY;
+            m4_trans_ind   $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
+            m4_trans_ind                ? /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY
+            m4_trans_ind                : |_out_pipe/head['']/_trans_hier$ANY;
          $trans_avail = ! /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass || /_top|_in_pipe>>m4_reverse_bypass_align$trans_avail;
          $trans_valid = $trans_avail && ! $blocked;
          ?$trans_valid
             /_trans_hier
- m4_trans_ind           $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
+         m4_trans_ind   $ANY = |_out_pipe/fifo_head['']/_trans_hier$ANY;
 
    m4_popdef(['m4_ptr_width'])
    m4_popdef(['m4_counter_width'])
@@ -709,7 +709,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
             $trans_avail = $trans_valid;
             ?$trans_valid
                /_trans_hier
- m4_trans_ind              $ANY = /_top|_in_pipe['']/_trans_hier$ANY;
+            m4_trans_ind   $ANY = /_top|_in_pipe['']/_trans_hier$ANY;
       // Instantiate FIFO.  Output to stage (m4_out_at - 1) because bypass is m4_out_at.
       m4+flop_fifo_v2( |_in_pipe, @_in_at, |_out_pipe, @_arb_at, #_depth, /_trans_hier, #_high_water)
 
@@ -771,7 +771,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
          $trans_valid = $fifo_trans_avail || $can_bypass_fifos;
          ?$trans_valid
             /_trans_hier
- m4_trans_ind           $ANY = |_out_pipe$fifo_trans_avail ? |_out_pipe/fifos_out$ANY : /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY;
+         m4_trans_ind   $ANY = |_out_pipe$fifo_trans_avail ? |_out_pipe/fifos_out$ANY : /_top|_in_pipe['']/_trans_hier>>m4_reverse_bypass_align$ANY;
 
 m4_popdef(['m4_arb_at'])
 m4_popdef(['m4_bypass_align'])
@@ -860,10 +860,10 @@ m4_popdef(['m4_trans_ind'])
          @m4_stage_eval(@_in_at + 1)
             ?$valid
                /_trans_hier
- m4_trans_ind              $ANY =
- m4_trans_ind                $passed_on
- m4_trans_ind                    ? /_hop[prev_hop]|rg>>1$ANY
- m4_trans_ind                    : /_hop|_in_pipe<>0$ANY;
+            m4_trans_ind   $ANY =
+            m4_trans_ind     $passed_on
+            m4_trans_ind         ? /_hop[prev_hop]|rg>>1$ANY
+            m4_trans_ind         : /_hop|_in_pipe<>0$ANY;
       |_out_pipe
          // Ring out
          @_out_at
@@ -873,7 +873,7 @@ m4_popdef(['m4_trans_ind'])
          ?$trans_valid
             @1
                /_trans_hier
- m4_trans_ind              $ANY = /_hop|rg>>m4_in_out_align$ANY;
+            m4_trans_ind   $ANY = /_hop|rg>>m4_in_out_align$ANY;
 m4_popdef(['m4_out_in_align'])
 m4_popdef(['m4_in_out_align'])
 m4_popdef(['m4_trans_ind'])
@@ -911,13 +911,13 @@ m4_popdef(['m4_trans_ind'])
             /trans  // Context for non-speculative calculation.
             /pred_trans  // Context for prediction (speculative transaction).
                /_trans_hier
- m4_trans_ind              $ANY = |_in_pipe/trans$ANY;  // Pass through real calculation by default.
+            m4_trans_ind   $ANY = |_in_pipe/trans$ANY;  // Pass through real calculation by default.
          @_comp_stage
             /comp
                /_trans_hier
- m4_trans_ind              // Pull speculative signals and actual ones for comparison to
- m4_trans_ind              // determine mispredict.
- m4_trans_ind              $ANY = |_in_pipe/trans$ANY ^ |_in_pipe/pred_trans$ANY;
+            m4_trans_ind   // Pull speculative signals and actual ones for comparison to
+            m4_trans_ind   // determine mispredict.
+            m4_trans_ind   $ANY = |_in_pipe/trans$ANY ^ |_in_pipe/pred_trans$ANY;
                $mispred = | {$_pred_sigs};
       @_comp_stage
          // Unconditioned signal indicating need to delay 1 cycle.
@@ -934,9 +934,8 @@ m4_popdef(['m4_trans_ind'])
             $maybe_valid = /_top|_in_pipe<>0$valid || $delayed;
             ?$maybe_valid
                /_trans_hier
- m4_trans_ind              $ANY = $delayed ? /_top|_in_pipe/trans>>1$ANY : /_top|_in_pipe/pred_trans<>0$ANY;
+            m4_trans_ind   $ANY = $delayed ? /_top|_in_pipe/trans>>1$ANY : /_top|_in_pipe/pred_trans<>0$ANY;
          @_comp_stage
             $valid = (/_top|_in_pipe<>0$valid && ! /_top|_in_pipe/comp<>0$mispred) || $delayed;
    m4_popdef(['m4_trans_ind'])
-
 
