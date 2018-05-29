@@ -384,7 +384,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_popdef(['m4_in_p'])
    m4_popdef(['m4_in_s'])
    m4_popdef(['m4_out_p'])
-   m4_pushdef(['m4_out_s'])
+   m4_pushdef(['m4_out_s'])'])
    
 
 // A simple flop-based FIFO with entry-granular clock gating.
