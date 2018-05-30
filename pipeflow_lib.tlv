@@ -184,9 +184,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   |name['']output_stage
 //      @1
 //         $trans_avail   // A transaction is available for consumption.
-\TLV bp_pipeline(|_name, @_input_stage, @_output_stage,/_trans)
+\TLV bp_pipeline(/_top, |_name, @_input_stage, @_output_stage,/_trans)
    m4_forloop(['m4_stage'], m4_incr(@_input_stage), @_output_stage, ['
-   m4+bp_stage(']/top[', ']|_name['['']m4_decr(m4_stage), 1, ']|_name['['']m4_stage, 1,/_trans)
+   m4+bp_stage(']/_top[', ']|_name['['']m4_decr(m4_stage), 1, ']|_name['['']m4_stage, 1, ']/_trans[')
    '])
 
 
@@ -287,7 +287,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 \TLV stall_pipeline(/_top, |_name, #_first_cycle, #_last_cycle, /_trans)
    m4_forloop(['m4_cycle'], #_first_cycle, #_last_cycle, ['
-   m4+stall_stage(']/_top[', ']|_name['['']m4_cycle, @0, ']|_name['['']m4_eval(m4_cycle + 1), @0, ']/_trans[')
+   m4+stall_stage(']/_top[', ']|_name['['']m4_cycle, @1, ']|_name['['']m4_eval(m4_cycle + 1), @1, ']/_trans[')
    '])
    //
 
@@ -977,4 +977,51 @@ m4_popdef(['m4_trans_ind'])
             /trans
                $ANY = |_arb_out$bypass ? /_top_in2|_in2/trans>>1$ANY :
                                         /_top_in1|_in1/trans>>1$ANY;
+
+
+// ==================
+// Macros for Testing
+// ==================
+
+\TLV simple_flow_macro_testbench()
+   |pipe1
+      @1
+         $reset = /top<>0$reset;
+         m4_rand($trans_avail, 0, 0)
+         $trans_valid = $trans_avail && ! $blocked;
+         $Cnt[7:0] <= $reset       ? '0 :
+                      $trans_valid ? $Cnt + 8'b1 :
+                                     $RETAIN;
+         // Count the number of times backpressure is applied to an available transaction since the last.
+         $BackpressureCnt[7:0] <= $reset || $trans_valid   ? '0 :
+                                  $trans_avail && $blocked ? $BackpressureCnt + 8'b1 :
+                                                             $RETAIN;
+         ?$trans_valid
+            /trans
+               $cnt[7:0] = |pipe1$Cnt;
+               // Flag whether this transaction was backpressured.
+               $backpressured = |pipe1$BackpressureCnt > 8'b0;
+
+   |pipe3
+      @1
+         //$reset = /top<>0$reset;
+         $Cnt[7:0] <= $reset ? '0 :
+                      $trans_valid ? $Cnt + 8'b1 :
+                                     $RETAIN;
+         // Block output with 5/8 probability.
+         m4_rand($blocked_rand, 2, 0)
+         $blocked = $blocked_rand < 3'd5;
+         ?$trans_valid
+            /trans
+               `BOGUS_USE($cnt)
+         $Error <= $reset       ? '0 :
+                   $trans_valid ? $Error || (/trans$cnt != $Cnt) :
+                   $RETAIN;
+         // Sticky indication that there was a backpressured transaction.
+         $BackpressureApplied <= $reset       ? 1'b0 :
+                                 $trans_valid ? $BackpressureApplied || /trans$backpressured :
+                                                $RETAIN;
+         
+         $passed = $Cnt > 8 && ! $Error && $BackpressureApplied;
+
       
