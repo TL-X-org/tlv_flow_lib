@@ -29,7 +29,6 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-//m4_top_module_def(top)
 m4_makerchip_module()
 /* verilator lint_off UNOPTFLAT */  // Probably want to make this a default in Makerchip. See what happens when uprev'ed to 1d.
 m4_include(['pipeflow_tlv.m4'])
