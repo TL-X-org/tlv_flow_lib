@@ -355,108 +355,59 @@ m4_define(['m4_into_fields'], ['{m4_into_fields_lhs(['$2'], [''], $1_FIELDS)['} 
 
 // Reduction macro.
 // Performs an operation across all instances of a hierarchy and provides the result outside that hierarchy.
-// m4+redux($sum[7:0], >hier, max, min, $addend, '0, +)
-m4_define_plus(['m4_redux'], ['
-
-m4_pushdef(['m4_redux_sig'],    ['$5'])
-m4_pushdef(['m4_hier'],         ['$6'])
-m4_pushdef(['m4_MAX'],          ['$7'])
-m4_pushdef(['m4_MIN'],          ['$8'])
-m4_pushdef(['m4_sig'],          ['$9'])
-m4_pushdef(['m4_init'],         ['$10'])
-m4_pushdef(['m4_op'],           ['$11'])
-
-'], m4___file__, m4___line__, ['
+// m4+redux($sum[7:0], /hier, max, min, $addend, '0, +)
+\TLV redux($_redux_sig,/_hier,#_MAX,#_MIN,$_sig,$_init,#_op)
    \always_comb
-      $m4_redux_sig = m4_init;
-      for (int i = m4_MIN; i <= m4_MAX; i++)
-         m4_redux_sig = m4_redux_sig m4_op m4_hier[i]m4_sig;
-'],
-
-['
-m4_popdef(['m4_redux_sig'])
-m4_popdef(['m4_hier'])
-m4_popdef(['m4_MAX'])
-m4_popdef(['m4_MIN'])
-m4_popdef(['m4_sig'])
-m4_popdef(['m4_init'])
-m4_popdef(['m4_op'])
-'])
+      $_redux_sig = $_init;
+      for (int i = #_MIN; i <= #_MAX; i++)
+         $_redux_sig = $_redux_sig #_op /_hier[i]$_sig;
 
 
 // Similar to m4+redux, but each element is conditioned.
 // Performs an operation across all instances of a hierarchy and provides the result outside that hierarchy.
-// m4+redux_cond($selected_value[7:0], >hier, max, min, $value, '0, |, $select)
-m4_define_plus(['m4_redux_cond'], ['
-
-m4_pushdef(['m4_redux_sig'],    ['$5'])
-m4_pushdef(['m4_hier'],         ['$6'])
-m4_pushdef(['m4_MAX'],          ['$7'])
-m4_pushdef(['m4_MIN'],          ['$8'])
-m4_pushdef(['m4_sig'],          ['$9'])
-m4_pushdef(['m4_init'],         ['$10'])
-m4_pushdef(['m4_op'],           ['$11'])
-m4_pushdef(['m4_cond_expr'],    ['$12'])
-
-'], m4___file__, m4___line__, ['
-   m4_hier[*]
-      m4_sig['']_cond = m4_cond_expr ? m4_sig : m4_init;
+// m4+redux_cond($selected_value[7:0], /hier, max, min, $value, '0, |, $select)
+\TLV redux_cond($_redux_sig,/_hier,#_MAX,#_MIN,$_sig,$_init,#_op,$_cond_expr)
+   /_hier[*]
+      $_sig['']_cond = $_cond_expr ? $_sig : $_init;
    \always_comb
-      $m4_redux_sig = m4_init;
-      for (int i = m4_MIN; i <= m4_MAX; i++)
-         m4_redux_sig = m4_redux_sig m4_op m4_hier[i]m4_sig;
-'],
-
-['
-m4_popdef(['m4_redux_sig'])
-m4_popdef(['m4_hier'])
-m4_popdef(['m4_MAX'])
-m4_popdef(['m4_MIN'])
-m4_popdef(['m4_sig'])
-m4_popdef(['m4_init'])
-m4_popdef(['m4_op'])
-m4_popdef(['m4_cond_expr'])
-'])
+      $_redux_sig = $_init;
+      for (int i = #_MIN; i <= #_MAX; i++)
+         $_redux_sig = $_redux_sig #_op /_hier[i]$_sig;
 
 
 // Select across a hierarchy (MUX) within a pipeline with a decoded select.  Works for $pipe_signals and $ANY.
-// m4+select($selected_value[7:0], >top, >hier, ...fix)
-m4_define_plus(['m4_select'], ['
-
-m4_pushdef(['m4_redux_sig'],    ['$5'])   // The resulting signal, including bit range.
-m4_pushdef(['m4_top'],          ['$6'])   // Base scope for references.
-m4_pushdef(['m4_hier'],         ['$7'])   // use m4_top['']m4_hier[*]m4_subhier
-m4_pushdef(['m4_subhier'],      ['$8'])   // Replicated logic is created under m4_hier[*].
+// m4+select($selected_value[7:0], /top, /hier, ...fix)
+//$_redux_sig The resulting signal, including bit range.
+//  /_top Base scope for references.
+// /_hier  use /_top['']/_hier[*]/_subhier
+// /_subhier Replicated logic is created under m4_hier[*].
 //m4_pushdef(['m4_MAX'],          ['$8'])
 //m4_pushdef(['m4_MIN'],          ['$9'])
-m4_pushdef(['m4_sel_sig_subhier'],['$9'])   // m4_top['']m4_hier[*]m4_sel_sig_subhier['']m4_sel_sig selects an input.
-m4_pushdef(['m4_sel_sig'],      ['$10'])
-m4_pushdef(['m4_sig'],          ['$11'])  // The signal to select, including bit range.
-m4_pushdef(['m4_redux_sig_cond'], ['$12'])  // When condition for redux sig.  [''] for none (produces '0 if no select);  ['-'] or ['-$signame'] to generate as "| m4_top['']m4_hier[*]m4_sel_sig_subhier['']m4_sel_sig"; ['$signame'] to use given signal.
+// /_sel_sig_subhier /_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig selects an input.
+// $_redux_sig_cond    When condition for redux sig.  [''] for none (produces '0 if no select);  ['-'] or ['-$signame'] to generate as "| /_top['']/_hier[*]/_sel_sig_subhier['']/_sel_sig"; ['$signame'] to use given signal.
+\TLV select($_redux_sig,/_top,/_hier,/_subhier,$_sel_sig_subhier,$_sel_sig,$_sig,$_redux_sig_cond)
 
-m4_pushdef(['m4_hier_index'], ['m4_substr(m4_hier, 1)'])
+m4_pushdef(['m4_hier_index'], ['m4_substr(/_hier, 1)'])
 m4_pushdef(['m4_assign_redux_sig_cond'], m4_ifelse(m4_substr(m4_redux_sig_cond, 0, 1), ['-'], ['true'], ['']))  // Has '-'.
-m4_define(['m4_redux_sig_cond'],         m4_ifelse(m4_substr(m4_redux_sig_cond, 0, 1), ['-'], m4_substr(m4_redux_sig_cond, 1), m4_redux_sig_cond))  // Remove '-'.
-m4_define(['m4_redux_sig_cond'],         m4_ifelse(m4_redux_sig_cond,[''],m4_sel_sig['']_cond,m4_redux_sig_cond))  // Make up a signal name if not provided.
-
-'], m4___file__, m4___line__, ['
+m4_define(['$_redux_sig_cond'],         m4_ifelse(m4_substr($_redux_sig_cond, 0, 1), ['-'], m4_substr($_redux_sig_cond, 1), $_redux_sig_cond))  // Remove '-'.
+m4_define(['$_redux_sig_cond'],         m4_ifelse($_redux_sig_cond,[''],$_sel_sig['']_cond,$_redux_sig_cond))  // Make up a signal name if not provided.
 
    // This is a suboptimal implementation for simulation.
    // It does AND/OR reduction.  It would be better in simulation to simply index the desired value,
    //   but this is not currently supported in SandPiper as it is not legal across generate loops.
-   m4_hier[*]
-      >accum
+   /_hier[*]
+      /accum
          \always_comb
-            if (m4_hier_index == \$low(m4_top['']m4_hier[*]m4_sel_sig_subhier['']m4_sel_sig))
-               $m4_sig = m4_top['']m4_hier['']m4_sel_sig_subhier['']m4_sel_sig ? m4_top['']m4_hier['']m4_subhier['']m4_sig : '0;
+            if (m4_hier_index == \$low(/_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig))
+               $m4_sig = /_top['']/_hier['']$_sel_sig_subhier['']$_sel_sig ? /_top['']/_hier['']/_subhier['']$_sig : '0;
             else
-               m4_sig = m4_top['']m4_hier['']m4_sel_sig_subhier['']m4_sel_sig ? m4_top['']m4_hier['']m4_subhier['']m4_sig : m4_hier[m4_hier_index-1]>accum['']m4_sig;
-m4_ifelse(m4_redux_sig_cond,['-'],['m4_dnl
-   m4_redux_sig = m4_hier[\$high(m4_top['']m4_hier[*]m4_sel_sig_subhier['']m4_sel_sig)]>accum['']m4_sig;
+               $_sig = /_top['']/_hier['']$_sel_sig_subhier['']$_sel_sig ? /_top['']/_hier['']/_subhier['']$_sig : /_hier[m4_hier_index-1]/accum['']$_sig;
+m4_ifelse($_redux_sig_cond,['-'],['m4_dnl
+   $_redux_sig = /_hier[\$high(/_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig)]/accum['']$_sig;
 '],['m4_dnl
-   m4_ifelse(m4_assign_redux_sig_cond,[''],[''],m4_redux_sig_cond = | m4_top['']m4_hier[*]m4_sel_sig_subhier['']m4_sel_sig;)
-   m4_ifelse(m4_redux_sig_cond,[''],[''],?m4_redux_sig_cond['
-      '])m4_redux_sig = m4_hier[\$high(m4_top['']m4_hier[*]m4_sel_sig_subhier['']m4_sel_sig)]>accum['']m4_sig;
+   m4_ifelse(m4_assign_redux_sig_cond,[''],[''],$_redux_sig_cond = | /_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig;)
+   m4_ifelse($_redux_sig_cond,[''],[''],? $_redux_sig_cond['
+      '])$_redux_sig = /_hier[\$high(/_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig)]/accum['']$_sig;
 '])m4_dnl
    /* Old way:
    \always_comb
@@ -464,22 +415,11 @@ m4_ifelse(m4_redux_sig_cond,['-'],['m4_dnl
       for (int i = m4_MIN; i <= m4_MAX; i++)
          m4_redux_sig = m4_redux_sig | (m4_hier[i]m4_index_sig['']_match ? m4_hier[i]m4_sig : '0);
    */
-'],
 
-['
-m4_popdef(['m4_redux_sig'])
-m4_popdef(['m4_top'])
-m4_popdef(['m4_hier'])
-m4_popdef(['m4_subhier'])
-//m4_popdef(['m4_MAX'])
-//m4_popdef(['m4_MIN'])
-m4_popdef(['m4_sel_sig_subhier'])
-m4_popdef(['m4_sel_sig'])
-m4_popdef(['m4_sig'])
-m4_popdef(['m4_redux_sig_cond'])
+ 
 m4_popdef(['m4_hier_index'])
 m4_popdef(['m4_assign_redux_sig_cond'])
-'])
+
 
 
 
