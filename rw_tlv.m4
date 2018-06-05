@@ -356,23 +356,23 @@ m4_define(['m4_into_fields'], ['{m4_into_fields_lhs(['$2'], [''], $1_FIELDS)['} 
 // Reduction macro.
 // Performs an operation across all instances of a hierarchy and provides the result outside that hierarchy.
 // m4+redux($sum[7:0], /hier, max, min, $addend, '0, +)
-\TLV redux($_redux_sig,/_hier,#_MAX,#_MIN,$_sig,$_init,#_op)
+\TLV redux($_redux_sig,/_hier,#_MAX,#_MIN,$_sig,$_init_expr ,_op)
    \always_comb
-      $_redux_sig = $_init;
+      $_redux_sig = $_init_expr ;
       for (int i = #_MIN; i <= #_MAX; i++)
-         $_redux_sig = $_redux_sig #_op /_hier[i]$_sig;
+         $_redux_sig = $_redux_sig _op /_hier[i]$_sig;
 
 
 // Similar to m4+redux, but each element is conditioned.
 // Performs an operation across all instances of a hierarchy and provides the result outside that hierarchy.
 // m4+redux_cond($selected_value[7:0], /hier, max, min, $value, '0, |, $select)
-\TLV redux_cond($_redux_sig,/_hier,#_MAX,#_MIN,$_sig,$_init,#_op,$_cond_expr)
+\TLV redux_cond($_redux_sig,/_hier,#_MAX,#_MIN,$_sig,$_init_expr ,_op,$_cond_expr)
    /_hier[*]
-      $_sig['']_cond = $_cond_expr ? $_sig : $_init;
+      $_sig['']_cond = $_cond_expr ? $_sig : $_init_expr ;
    \always_comb
-      $_redux_sig = $_init;
+      $_redux_sig = $_init_expr ;
       for (int i = #_MIN; i <= #_MAX; i++)
-         $_redux_sig = $_redux_sig #_op /_hier[i]$_sig;
+         $_redux_sig = $_redux_sig _op /_hier[i]$_sig;
 
 
 // Select across a hierarchy (MUX) within a pipeline with a decoded select.  Works for $pipe_signals and $ANY.
@@ -389,8 +389,8 @@ m4_define(['m4_into_fields'], ['{m4_into_fields_lhs(['$2'], [''], $1_FIELDS)['} 
 
 m4_pushdef(['m4_hier_index'], ['m4_substr(/_hier, 1)'])
 m4_pushdef(['m4_assign_redux_sig_cond'], m4_ifelse(m4_substr(m4_redux_sig_cond, 0, 1), ['-'], ['true'], ['']))  // Has '-'.
-m4_define(['$_redux_sig_cond'],         m4_ifelse(m4_substr($_redux_sig_cond, 0, 1), ['-'], m4_substr($_redux_sig_cond, 1), $_redux_sig_cond))  // Remove '-'.
-m4_define(['$_redux_sig_cond'],         m4_ifelse($_redux_sig_cond,[''],$_sel_sig['']_cond,$_redux_sig_cond))  // Make up a signal name if not provided.
+m4_pushdef(['S_redux_sig_cond'],         m4_ifelse(m4_substr($_redux_sig_cond, 0, 1), ['-'], m4_substr($_redux_sig_cond, 1), $_redux_sig_cond))  // Remove '-'.
+m4_pushdef(['S_redux_sig_cond'],         m4_ifelse($_redux_sig_cond,[''],$_sel_sig['']_cond,$_redux_sig_cond))  // Make up a signal name if not provided.
 
    // This is a suboptimal implementation for simulation.
    // It does AND/OR reduction.  It would be better in simulation to simply index the desired value,
@@ -419,6 +419,7 @@ m4_ifelse($_redux_sig_cond,['-'],['m4_dnl
  
 m4_popdef(['m4_hier_index'])
 m4_popdef(['m4_assign_redux_sig_cond'])
+m4_popdef(['S_redux_sig_cond'])
 
 
 
@@ -537,3 +538,5 @@ m4_define(['m4_define_plus'],
 
 
 m4_divert['']m4_dnl
+
+
