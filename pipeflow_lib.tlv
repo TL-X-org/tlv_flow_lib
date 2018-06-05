@@ -773,8 +773,8 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //
 
 m4_unsupported(['m4_vc_flop_fifo'], 1)
-\TLV vc_flop_fifo_v2(/_top, |_in_pipe, @_in_at, |_out_pipe, @_out_at, #_depth, /_trans, _vc_range, _prio_range, @_bypass_at, #_high_water)
-   m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at, [''], ['@_out_at'], ['@_bypass_at']))
+\TLV vc_flop_fifo_v2(/_top, |_in_pipe, @_in_at, |_out_pipe, @_out_at, #_depth, /_trans, _vc_range, _prio_range, @_bypass_at_opt, #_high_water)
+   m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at_opt, [''], ['@_out_at'], ['@_bypass_at_opt']))
    m4_pushdef(['m4_arb_at'], m4_stage_eval(@_out_at - 1))  // Arb and read VC FIFOs the stage before m4_out_at.
    m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_reverse_bypass_align'], m4_align(@_in_at, @_out_at))
@@ -811,7 +811,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
             $fifo_sel = m4_am_max(/other_vc[*]$competing, vc) && | (/prio[*]$Match & /_top/prio[*]|_out_pipe$sel);
                // TODO: Need to replace m4_am_max with round-robin within priority.
             $blocked = ! $fifo_sel;
-         @_bypass_at
+         m4_bypass_at
             // Can bypass FIFOs?
             $can_bypass_fifos_for_this_vc = /vc|_in_pipe>>m4_reverse_bypass_align$vc_trans_valid &&
                                             /vc|_in_pipe>>m4_align(@_in_at + 1, @_out_at)$empty &&
@@ -844,7 +844,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          // Output transaction
          //
 
-      @_bypass_at
+      m4_bypass_at
          // Incorporate bypass
          // Bypass if there's no transaction from the FIFOs, and the incoming transaction is okay for output.
          $can_bypass_fifos = | /_top/vc[*]|_out_pipe$can_bypass_fifos_for_this_vc;
