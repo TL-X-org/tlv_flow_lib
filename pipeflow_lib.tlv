@@ -187,25 +187,25 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    |_out_pipe
       @m4_stage_eval(@_out_stage - m4_b_latch <<1)['']m4_post_latch_phase
-         $trans_avail = (>>1$trans_avail && >>1$blocked) ||  // Recirc'ed or
+         $avail = (>>1$avail && >>1$blocked) ||  // Recirc'ed or
                         // Above is recomputation of $recirc to avoid a flop.
                         // For SELF, its in the same stage, and is redundant computation.
-                        /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage<<1)$trans_avail; // Incoming available
-         //$first_avail = $trans_avail && ! >>1$blocked;  // Transaction is newly available.
+                        /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage<<1)$avail; // Incoming available
+         //$first_avail = $avail && ! >>1$blocked;  // Transaction is newly available.
       @m4_stage_eval(@_out_stage<<1)m4_pre_latch_phase
-         ?$trans_avail  // Physically, $first_avail && *reset_b for functional gating in
-                        // place of recirculation.
+         ?$avail  // Physically, $first_avail && *reset_b for functional gating in
+                  // place of recirculation.
             /_trans
          m4_trans_ind   $ANY =
          m4_trans_ind      |_out_pipe>>1$recirc ? >>1$ANY
          m4_trans_ind                           : /_top|_in_pipe/_trans>>m4_align(@_in_stage, @_out_stage - 1)$ANY;
       @m4_stage_eval(@_out_stage - m4_b_latch)['']m4_post_latch_phase
-         $recirc = $trans_avail && $blocked;  // Available transaction that is blocked; must recirc.
+         $recirc = $avail && $blocked;  // Available transaction that is blocked; must recirc.
    |_in_pipe
       @m4_stage_eval(@_in_stage - m4_b_latch)['']m4_post_latch_phase
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;       
          // This trans is blocked (whether valid or not) if the next stage is recirculating.
-         $accepted = $trans_avail && ! $blocked;
+         $accepted = $avail && ! $blocked;
          `BOGUS_USE($accepted)  // provided for optional upstream use.
    m4_popdef(['m4_trans_ind'])
 
@@ -505,10 +505,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //       $full 000010000  (Assuming default m4_high_water.)
 //
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
-
-
-
-
 m4_unsupported(['m4_flop_fifo'], 1)
 \TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans,#_high_water)
    m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
@@ -916,10 +912,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //         @(out_stage+1)
 //            ?trans_valid = $trans_avail && ! $blocked
 //               $ANY        // Output transaction
-
-
-
-\TLV simple_ring(/_hop,|_in_pipe,@_in_at,|_out_pipe,@_out_at,/_reset_scope,@_reset_at,$_reset_sig,|_name,/_trans)
+\TLV simple_ring(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, /_reset_scope, @_reset_at, $_reset_sig, |_name, /_trans)
    m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
@@ -929,37 +922,39 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
       |default
          @0
             \SV_plus
-            int prev_hop = (m4_strip_prefix(/_hop) + RING_STOPS - 1) % RING_STOPS;
+               int prev_hop = (m4_strip_prefix(/_hop) + RING_STOPS - 1) % RING_STOPS;
       |_in_pipe
          @_in_at
             $blocked = /_hop|_name<>0$passed_on;
+            $accepted = $avail && ! $blocked;
+            `BOGUS_USE($accepted)  // provided for optional upstream use.
       |_name
          @_in_at
             $passed_on = /_hop[prev_hop]|_name>>1$pass_on;
             $valid = ! /_reset_scope>>m4_align(@_reset_at, @_in_at)$_reset_sig &&
-                     ($passed_on || /_hop|_in_pipe<>0$trans_avail);
+                     ($passed_on || /_hop|_in_pipe<>0$avail);
             $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
             $dest[RING_STOPS_WIDTH-1:0] =
                $passed_on
                   ? /_hop[prev_hop]|_name>>1$dest
-                  : /_hop|_in_pipe<>0$dest;
+                  : /_hop|_in_pipe/_trans<>0$dest;
          @m4_stage_eval(@_in_at + 1)
             ?$valid
                /_trans
             m4_trans_ind   $ANY =
-            m4_trans_ind     $passed_on
-            m4_trans_ind         ? /_hop[prev_hop]|_name>>1$ANY
-            m4_trans_ind         : /_hop|_in_pipe<>0$ANY;
+            m4_trans_ind     |_name$passed_on
+            m4_trans_ind         ? /_hop[prev_hop]|_name/_trans>>1$ANY
+            m4_trans_ind         : /_hop|_in_pipe/_trans<>0$ANY;
       |_out_pipe
          // Ring out
          @_out_at
-            $trans_avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
+            $avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
             $blocked = 1'b0;
-            $trans_valid = $trans_avail && ! $blocked;
+            $trans_valid = $avail && ! $blocked;
          ?$trans_valid
             @m4_stage_eval(@_out_at + 1)
                /_trans
-            m4_trans_ind   $ANY = /_hop|_name>>m4_in_out_align$ANY;
+            m4_trans_ind   $ANY = /_hop|_name/_trans>>m4_in_out_align$ANY;
 m4_popdef(['m4_out_in_align'])
 m4_popdef(['m4_in_out_align'])
 m4_popdef(['m4_trans_ind'])
