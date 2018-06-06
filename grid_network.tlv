@@ -29,8 +29,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // ================================================================
 // BE SURE TO CHOOSE AN APPROPRIATE LIBRARY DURING DEVELOPMENT.
-m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/8135b9ee5b3b3954196aa31b583d56a0c67f66e8/pipeflow_lib.tlv'])
 m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/fundamentals_lib.tlv'])
+m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
 // ================================================================
 
 // This example implements an on-chip network, implemented as an X-Y-routed grid.
