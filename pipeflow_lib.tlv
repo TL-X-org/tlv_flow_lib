@@ -931,13 +931,12 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    m4_pushdef(['m4_hop_name'], m4_strip_prefix(/_hop))
    m4_pushdef(['M4_HOP'], ['M4_']m4_translit(m4_hop_name, ['a-z'], ['A-Z']))
-   
    // Logic
    /_hop[*]
       |default
          @0
             \SV_plus
-               int prev_hop = (m4_hop_name + M4_HOP['']_CNT - 1) % M4_HOP['']_CNT;
+               int prev_hop = (m4_hop_name + m4_echo(M4_HOP['_CNT']) - 1) % m4_echo(M4_HOP['_CNT']);
       |_in_pipe
          @_in_at
             $blocked = /_hop|_name<>0$passed_on;
@@ -949,7 +948,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
             $valid = ! /_reset_scope>>m4_align(@_reset_at, @_in_at)$_reset_sig &&
                      ($passed_on || /_hop|_in_pipe<>0$avail);
             $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
-            $dest[M4_HOP['']_INDEX_RANGE] =
+            $dest[m4_echo(M4_HOP['_INDEX_RANGE'])] =
                $passed_on
                   ? /_hop[prev_hop]|_name>>1$dest
                   : /_hop|_in_pipe/_trans<>0$dest;
