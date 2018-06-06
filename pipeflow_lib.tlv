@@ -206,6 +206,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;       
          // This trans is blocked (whether valid or not) if the next stage is recirculating.
          $accepted = $trans_avail && ! $blocked;
+         `BOGUS_USE($accepted)  // provided for optional upstream use.
    m4_popdef(['m4_trans_ind'])
 
 
@@ -299,6 +300,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       @_in_stage
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$blocked;
          $accepted = $trans_avail && ! $blocked;
+         `BOGUS_USE($accepted)  // provided for optional upstream use.
    |_out_pipe
       @_out_stage
          // Propagate $reset to next stage with no delay (may create timing pressure,
@@ -529,6 +531,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
          $blocked = >>1$full && $out_blocked;
          `BOGUS_USE($blocked)   // Not required to be consumed elsewhere.
          $accepted = $trans_avail && ! $blocked;
+         `BOGUS_USE($accepted)  // provided for optional upstream use.
          $would_bypass = >>1$empty;
          $bypass = $would_bypass && ! $out_blocked;
          $push = $trans_valid && ! $bypass;
@@ -709,6 +712,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
          $out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
          $blocked = (/_top/fifo>>m4_align(0, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
          $accepted = $trans_avail && ! $blocked;
+         `BOGUS_USE($accepted)  // provided for optional upstream use.
    /fifo
       simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
          fifo(.clk(clk), .reset(/_top|_in>>m4_align(@_in, 0)$reset),
