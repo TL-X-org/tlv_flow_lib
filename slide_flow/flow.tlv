@@ -150,8 +150,8 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
          |stall0
             @1
                $reset = /top|default<>0$reset;
-               $trans_avail = ! $reset && /top/tb/ring_stop|send<>0$trans_valid;
-               $trans_valid = $trans_avail && ! $blocked;
+               $avail = ! $reset && /top/tb/ring_stop|send<>0$trans_valid;
+               $trans_valid = $avail && ! $blocked;
                ?$trans_valid
                   /trans
                      $ANY = /top/tb/ring_stop|send/trans_out<>0$ANY;
@@ -176,8 +176,10 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
                $blocked = /stall_pipe|fifo_out_unconditioned<>0$blocked;
                //$accepted = /stall_pipe|fifo_out_unconditioned<>0$accepted;
          |fifo_out_unconditioned
+            @-1
+               $reset = /top|default>>1$reset;
             @0
-               $avail = /stall_pipe|fifo_out<>0$trans_avail;
+               $avail = /stall_pipe|fifo_out<>0$avail;
                /trans
                   $ANY = /stall_pipe|fifo_out/trans<>0$ANY;
          m4+bp_stage(/stall_pipe, |fifo_out_unconditioned, @0, |bp_out, @0, /trans, 0, 1)
@@ -197,8 +199,8 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
          |pipe2
             @0
                $reset = /top|default>>1$reset;
-               $trans_avail = ! $reset && /ring_stop|arb_out>>1$trans_valid;
-               $trans_valid = $trans_avail && ! $blocked;
+               $avail = ! $reset && /ring_stop|arb_out>>1$trans_valid;
+               $trans_valid = $avail && ! $blocked;
                ?$trans_valid
                   /trans
                      $ANY = /ring_stop|arb_out/trans>>1$ANY;
