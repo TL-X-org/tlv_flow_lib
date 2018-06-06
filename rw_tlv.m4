@@ -358,7 +358,7 @@ m4_define(['m4_into_fields'], ['{m4_into_fields_lhs(['$2'], [''], $1_FIELDS)['} 
 // m4+redux($sum[7:0], /hier, max, min, $addend, '0, +)
 \TLV redux($_redux_sig,/_hier,#_MAX,#_MIN,$_sig,$_init_expr ,_op)
    \always_comb
-      $_redux_sig = $_init_expr ;
+      $['']$_redux_sig = $_init_expr ;
       for (int i = #_MIN; i <= #_MAX; i++)
          $_redux_sig = $_redux_sig _op /_hier[i]$_sig;
 
@@ -385,30 +385,30 @@ m4_define(['m4_into_fields'], ['{m4_into_fields_lhs(['$2'], [''], $1_FIELDS)['} 
 //m4_pushdef(['m4_MIN'],          ['$9'])
 // /_sel_sig_subhier /_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig selects an input.
 // $_redux_sig_cond    When condition for redux sig.  [''] for none (produces '0 if no select);  ['-'] or ['-$signame'] to generate as "| /_top['']/_hier[*]/_sel_sig_subhier['']/_sel_sig"; ['$signame'] to use given signal.
-\TLV select($_redux_sig,/_top,/_hier,/_subhier,$_sel_sig_subhier,$_sel_sig,$_sig,$_redux_sig_cond)
-
-m4_pushdef(['m4_hier_index'], ['m4_substr(/_hier, 1)'])
-m4_pushdef(['m4_assign_redux_sig_cond'], m4_ifelse(m4_substr(m4_redux_sig_cond, 0, 1), ['-'], ['true'], ['']))  // Has '-'.
-m4_pushdef(['S_redux_sig_cond'],         m4_ifelse(m4_substr($_redux_sig_cond, 0, 1), ['-'], m4_substr($_redux_sig_cond, 1), $_redux_sig_cond))  // Remove '-'.
-m4_pushdef(['S_redux_sig_cond'],         m4_ifelse($_redux_sig_cond,[''],$_sel_sig['']_cond,$_redux_sig_cond))  // Make up a signal name if not provided.
-
+\TLV select($_redux_sig, /_top, /_hier, /_subhier, /_sel_sig_subhier, $_sel_sig, $_sig, $_redux_sig_cond)
+   
+   m4_pushdef(['m4_hier_index'], ['m4_substr(/_hier, 1)'])
+   m4_pushdef(['m4_assign_redux_sig_cond'], m4_ifelse(m4_substr(m4_redux_sig_cond, 0, 1), ['-'], ['true'], ['']))  // Has '-'.
+   m4_pushdef(['S_redux_sig_cond'],         m4_ifelse(m4_substr($_redux_sig_cond, 0, 1), ['-'], m4_substr($_redux_sig_cond, 1), $_redux_sig_cond))  // Remove '-'.
+   m4_define(['S_redux_sig_cond'],         m4_ifelse(S_redux_sig_cond, [''], $_sel_sig['']_cond, S_redux_sig_cond))  // Make up a signal name if not provided.
+   
    // This is a suboptimal implementation for simulation.
    // It does AND/OR reduction.  It would be better in simulation to simply index the desired value,
    //   but this is not currently supported in SandPiper as it is not legal across generate loops.
    /_hier[*]
       /accum
          \always_comb
-            if (m4_hier_index == \$low(/_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig))
-               $m4_sig = /_top['']/_hier['']$_sel_sig_subhier['']$_sel_sig ? /_top['']/_hier['']/_subhier['']$_sig : '0;
+            if (m4_hier_index == \$low(/_top['']/_hier[*]/_sel_sig_subhier['']$_sel_sig))
+               $['']$_sig = /_top['']/_hier/_sel_sig_subhier['']$_sel_sig ? /_top['']/_hier['']/_subhier['']$_sig : '0;
             else
-               $_sig = /_top['']/_hier['']$_sel_sig_subhier['']$_sel_sig ? /_top['']/_hier['']/_subhier['']$_sig : /_hier[m4_hier_index-1]/accum['']$_sig;
-m4_ifelse($_redux_sig_cond,['-'],['m4_dnl
-   $_redux_sig = /_hier[\$high(/_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig)]/accum['']$_sig;
-'],['m4_dnl
-   m4_ifelse(m4_assign_redux_sig_cond,[''],[''],$_redux_sig_cond = | /_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig;)
-   m4_ifelse($_redux_sig_cond,[''],[''],? $_redux_sig_cond['
-      '])$_redux_sig = /_hier[\$high(/_top['']/_hier[*]$_sel_sig_subhier['']$_sel_sig)]/accum['']$_sig;
-'])m4_dnl
+               $_sig = /_top['']/_hier['']/_sel_sig_subhier['']$_sel_sig ? /_top['']/_hier['']/_subhier$_sig : /_hier[m4_hier_index-1]/accum$_sig;
+   m4_ifelse($_redux_sig_cond,['-'],['
+   $_redux_sig = /_hier[\$high(/_top['']/_hier[*]/_sel_sig_subhier['']$_sel_sig)]/accum$_sig;
+   '], ['
+   m4_ifelse(m4_assign_redux_sig_cond, [''], [''], S_redux_sig_cond = | m/_top/_hier[*]/_sel_sig_subhier['']$_sel_sig;)
+   m4_ifelse(S_redux_sig_cond, [''], [''], ?S_redux_sig_cond['
+      '])$_redux_sig = /_hier[\$high(/_top['']/_hier[*]/_sel_sig_subhier['']$_sel_sig)]/accum$_sig;
+'])
    /* Old way:
    \always_comb
       $m4_redux_sig = m4_init;
@@ -416,10 +416,9 @@ m4_ifelse($_redux_sig_cond,['-'],['m4_dnl
          m4_redux_sig = m4_redux_sig | (m4_hier[i]m4_index_sig['']_match ? m4_hier[i]m4_sig : '0);
    */
 
- 
+m4_popdef(['S_redux_sig_cond'])
 m4_popdef(['m4_hier_index'])
 m4_popdef(['m4_assign_redux_sig_cond'])
-m4_popdef(['S_redux_sig_cond'])
 
 
 
