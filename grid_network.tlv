@@ -29,7 +29,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // ================================================================
 // BE SURE TO CHOOSE AN APPROPRIATE LIBRARY DURING DEVELOPMENT.
-m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
+m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/8135b9ee5b3b3954196aa31b583d56a0c67f66e8/pipeflow_lib.tlv'])
+m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/fundamentals_lib.tlv'])
 // ================================================================
 
 // This example implements an on-chip network, implemented as an X-Y-routed grid.
@@ -82,6 +83,8 @@ m4_define_hier(M4_PRIO, 2, 0)
 m4_define_hier(M4_VC, 2, 0)
 m4_define_hier(M4_FLIT_CNT, 16, 0)
 
+
+
 \TLV
    |reset
       @-1
@@ -96,7 +99,7 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
             // Generate stimulus feeding the E-Link input FIFO.
             @1
                $reset = /top|reset<>0$reset;
-               $head_tail_rand[2:0] = *RW_rand_vect[(0 + ((yy * xx) ^ ((3 * xx) + yy))) % 257 +: 3];
+               m4_rand($head_tail_rand, 2, 0, (yy * xx) ^ ((3 * xx) + yy))
                $head = ! $MidPacket &&              // can be head
                        (& $head_tail_rand) &&       // 1/8 probability
                        ! $reset &&                  // after reset
@@ -117,36 +120,36 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
                   $FlitCnt[3:0] <= ($reset || $tail) ? 0 : $FlitCnt + 1;
                
                // verilator lint_off CMPCONST */
-               $vc_rand[M4_VC_WIDTH-1:0] = *RW_rand_vect[(124 + ((yy * xx) ^ ((3 * yy) + yy))) % 257 +: ];
-               $vc[M4_VC_WIDTH-1:0] = ($vc_rand > M4_VC_MAX)        // out of range?
+               m4_rand($vc_rand, M4_VC_INDEX_MAX, 0, (yy * xx) ^ ((3 * yy) + yy))
+               $vc[M4_VC_INDEX_MAX:0] = ($vc_rand > M4_VC_MAX)        // out of range?
                            ? // drop the max bit in range
-                             $vc_rand && ~(M4_VC_WIDTH'b1 << (M4_VC_WIDTH - 1))
+                             $vc_rand && ~(M4_VC_INDEX_CNT'b1 << M4_VC_INDEX_MAX)
                            : $vc_rand;
-               $rand_valid[2:0] = *RW_rand_vect[(248 + ((yy * xx) ^ ((3 * xx) + yy))) % 257 +: 3];
+               m4_rand($rand_valid, 2, 0, (yy * xx) ^ ((3 * xx) + yy))
                $trans_valid = ($head || $MidPacket) && (| $rand_valid) && ! /xx/vc[$vc]|tb_gen$blocked;   // 1/8 probability of idle
                ?$trans_valid
                   /flit
                      // Generate a random flit.
                      // Random values from which to generate flit:
-                     $dest_x_rand[M4_XX_WIDTH-1:0] = *RW_rand_vect[(115 + ((yy * xx) ^ ((3 * xx) + yy))) % 257 +: ];
-                     $dest_y_rand[M4_YY_WIDTH-1:0] = *RW_rand_vect[(239 + ((yy * xx) ^ ((3 * xx) + yy))) % 257 +: ];
+                     m4_rand($dest_x_rand, M4_XX_INDEX_MAX, 0, (yy * xx) ^ ((3 * xx) + yy))
+                     m4_rand($dest_y_rand, M4_YY_INDEX_MAX, 0, (yy * xx) ^ ((3 * xx) + yy))
                      // Flit:
-                     $vc[M4_VC_WIDTH-1:0] = |tb_gen$vc;
+                     $vc[M4_VC_INDEX_RANGE] = |tb_gen$vc;
                      $head = |tb_gen$head;
                      $tail = |tb_gen$tail;
                      $pkt_cnt[7:0] = |tb_gen$PktCnt;
                      $flit_cnt[3:0] = |tb_gen$FlitCnt;
-                     $src_x[M4_XX_WIDTH-1:0] = xx;
-                     $src_y[M4_YY_WIDTH-1:0] = yy;
-                     $dest_x[M4_XX_WIDTH-1:0] = ($dest_x_rand > M4_XX_MAX) // out of range?
+                     $src_x[M4_XX_INDEX_RANGE] = xx;
+                     $src_y[M4_YY_INDEX_RANGE] = yy;
+                     $dest_x[M4_XX_INDEX_RANGE] = ($dest_x_rand > M4_XX_MAX) // out of range?
                                   ? // drop the max bit in range
-                                    $dest_x_rand && ~(M4_XX_WIDTH'b1 << (M4_XX_WIDTH - 1))
+                                    $dest_x_rand && ~(M4_XX_INDEX_CNT'b1 << M4_XX_INDEX_MAX)
                                   : $dest_x_rand;
-                     $dest_y[M4_YY_WIDTH-1:0] = ($dest_y_rand > M4_YY_MAX) // out of range?
+                     $dest_y[M4_YY_INDEX_RANGE] = ($dest_y_rand > M4_YY_MAX) // out of range?
                                   ? // drop the max bit in range
-                                    $dest_y_rand && ~(M4_YY_WIDTH'b1 << (M4_YY_WIDTH - 1))
+                                    $dest_y_rand && ~(M4_YY_INDEX_CNT'b1 << M4_YY_INDEX_MAX)
                                   : $dest_y_rand;
-                     $data[7:0] = *RW_rand_vect[(106 + ((yy * xx) ^ ((3 * xx) + yy))) % 257 +: 8];
+                     m4_rand($data, 7, 0, (yy * xx) ^ ((3 * xx) + yy))
                // verilator lint_on CMPCONST */
                
                
@@ -167,7 +170,7 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
                   $vc_trans_valid = /xx|tb_gen$trans_valid && (/xx|tb_gen/flit$vc == #vc);
             |netwk_inject
                @0
-                  $Prio[M4_VC_WIDTH-1:0] <= vc;  // Prioritize based on VC.
+                  $Prio[M4_VC_INDEX_RANGE] <= vc;  // Prioritize based on VC.
          //m4+vc_flop_fifo_v2(xx, tb_gen, 1, netwk_inject, 1, 6, >flit, M4_VC_MAX:M4_VC_MIN, M4_PRIO_MAX:M4_PRIO_MIN)
          m4+vc_flop_fifo_v2(/xx, |tb_gen, @1, |netwk_inject, @1, 6, /flit, M4_VC_RANGE, M4_PRIO_RANGE)
          /vc[*]
@@ -206,14 +209,14 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
                               assign $ANY = >yy[*UPSTREAM_Y]>xx[*UPSTREAM_X]>direction>sign|grid_out$ANY;
                
                // Grid FIFOs.
-               >M4_VC_RANGE
+               >M4_VC_HIER
                   |grid_fifo_out
                      @0
                         %next$Prio = >xx>vc|netwk_inject%+0$Prio;
-                     >M4_PRIO_RANGE
-               >M4_PRIO_RANGE
+                     >M4_PRIO_HIER
+               >M4_PRIO_HIER
                   |grid_fifo_out
-                     >M4_VC_RANGE
+                     >M4_VC_HIER
                m4 +vc_flop_fifo_v2(sign, grid_in, 1, grid_fifo_out, 1, 1, >flit, M4_VC_MAX:M4_VC_MIN, M4_PRIO_MAX:M4_PRIO_MIN)
                |grid_fifo_out
                   @1
@@ -246,8 +249,8 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
          /vc[*]
             |tb_out
                @0
-                  $Prio[M4_VC_WIDTH-1:0] <= /vc|netwk_inject<>0$Prio;
-                  $has_credit[0:0] = *RW_rand_vect[(230 + ((yy * xx) ^ ((3 * xx) + yy))) % 257 +: 1];
+                  $Prio[M4_VC_INDEX_RANGE] <= /vc|netwk_inject<>0$Prio;
+                  m4_rand($has_credit, 0, 0, (yy * xx) ^ ((3 * xx) + yy))
          |tb_out
             @1
                ?$trans_valid
@@ -264,47 +267,47 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
          $CycCnt[15:0] <= /top|reset<>0$reset ? 16'b0 : $CycCnt + 16'b1;
       
       @1
-         /yy[1:0] //>M4_YY_RANGE
-            /xx[1:0] //>M4_XX_RANGE
+         /yy[M4_YY_RANGE]
+            /xx[M4_XX_RANGE]
                // Keep track of how many flits were injected.
-               $inj_cnt[M4_XX_WIDTH-1:0] = /top/yy/xx|tb_gen$trans_valid ? 1 : 0;
-            m4+redux($inj_row_sum[(M4_XX_WIDTH + M4_YY_WIDTH)-1:0], /xx, M4_XX_MAX, 0, $inj_cnt, '0, +)
-         m4+redux($inj_sum[(M4_XX_WIDTH + M4_YY_WIDTH)-1:0], /yy, M4_YY_MAX, 0, $inj_row_sum, '0, +)
+               $inj_cnt[M4_XX_INDEX_RANGE] = /top/yy/xx|tb_gen$trans_valid ? 1 : 0;
+            m4+redux($inj_row_sum[(M4_XX_INDEX_CNT + M4_YY_INDEX_CNT)-1:0], /xx, M4_XX_MAX, 0, $inj_cnt, '0, +)
+         m4+redux($inj_sum[(M4_XX_INDEX_CNT + M4_YY_INDEX_CNT)-1:0], /yy, M4_YY_MAX, 0, $inj_row_sum, '0, +)
       @1
-         $inj_cnt[(M4_XX_WIDTH + M4_YY_WIDTH)-1:0] = /top|reset<>0$reset ? '0 : $inj_sum;
+         $inj_cnt[(M4_XX_INDEX_CNT + M4_YY_INDEX_CNT)-1:0] = /top|reset<>0$reset ? '0 : $inj_sum;
       
    |tb_out
-        // Alignment below with |tb_gen.
+      m4_define(['m4_gen_align'], ['0'])  // Alignment below with |tb_gen.
 
       @1
          $reset = /top|reset<>0$reset;
       @2
-         /yy[1:0] //>M4_YY_RANGE
-            /xx[1:0] //>M4_XX_RANGE
+         /yy[M4_YY_RANGE]
+            /xx[M4_XX_RANGE]
                // Keep track of how many flits came out.
-               $eject_cnt[M4_XX_WIDTH-1:0] = /top/yy/xx|tb_out$trans_valid ? 1 : 0;
-            m4+redux($eject_row_sum[(M4_XX_WIDTH + M4_YY_WIDTH)-1:0], /xx, M4_XX_MAX, 0, $eject_cnt, '0, +)
-         m4+redux($eject_sum[(M4_XX_WIDTH + M4_YY_WIDTH)-1:0], /yy, M4_YY_MAX, 0, $eject_row_sum, '0, +)
-         $eject_cnt[(M4_XX_WIDTH + M4_YY_WIDTH)-1:0] = $reset ? '0 : $eject_sum;
-         $FlitsInFlight[31:0] <= $reset ? '0 : $FlitsInFlight + {'b0, /top|tb_gen<>0$inj_cnt - $eject_cnt};
+               $eject_cnt[M4_XX_INDEX_RANGE] = /top/yy/xx|tb_out$trans_valid ? 1 : 0;
+            m4+redux($eject_row_sum[(M4_XX_INDEX_CNT + M4_YY_INDEX_CNT)-1:0], /xx, M4_XX_MAX, 0, $eject_cnt, '0, +)
+         m4+redux($eject_sum[(M4_XX_INDEX_CNT + M4_YY_INDEX_CNT)-1:0], /yy, M4_YY_MAX, 0, $eject_row_sum, '0, +)
+         $eject_cnt[(M4_XX_INDEX_CNT + M4_YY_INDEX_CNT)-1:0] = $reset ? '0 : $eject_sum;
+         $FlitsInFlight[31:0] <= $reset ? '0 : $FlitsInFlight + {{31 - (M4_XX_INDEX_CNT + M4_YY_INDEX_CNT){1'b0}}, /top|tb_gen<>0$inj_cnt - $eject_cnt};
          
-        // Refers to flit in tb_gen scope.
-        // Refers to flit in tb_out scope.
+      m4_define(['m4_gen_flit'], ['top/yy[y]/xx[m4_x]|tb_gen/flit>>m4_gen_align'])  // Refers to flit in tb_gen scope.
+      m4_define(['m4_out_flit'], ['top/yy[y]/xx[m4_x]|tb_out/flit'])  // Refers to flit in tb_out scope.
       @2
          \SV_plus
             always_ff @(posedge clk) begin
                if (! $reset) begin
-                  \$display("-In-    -Out-      (Cycle: \%d, Inflight: \%d)", /top|tb_gen<>0$CycCnt, $FlitsInFlight);
-                  \$display("/---\\\\   /---\\\\");
+                  \$display("-In- m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH-1,['    '])   -Out-      (Cycle: \%d, Inflight: \%d)", /top|tb_gen>>m4_gen_align$CycCnt, $FlitsInFlight);
+                  \$display("/m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH-1,---+)---\\\\   /m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH-1,---+)---\\\\");
                   for(int y = 0; y <= M4_YY_MAX; y++) begin
-                     \$display("\|   \|");
-                     \$display("\|   \|");
-                     \$display("\|   \|");
+                     \$display("\|m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,['\%1h\%1h\%1h\|'])   \|m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,['\%1h\%1h\%1h\|'])"m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,[', /m4_gen_flit$dest_x, /m4_gen_flit$dest_y, /m4_gen_flit$vc'])m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,[', /m4_out_flit$dest_x, /m4_out_flit$dest_y, /m4_out_flit$vc']));
+                     \$display("\|m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,['\%1h\%1h\%1h\|'])   \|m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,['\%1h\%1h\%1h\|'])"m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,[', /m4_gen_flit$src_x, /m4_gen_flit$src_y, /m4_gen_flit$vc'])m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,[', /m4_out_flit$src_x, /m4_out_flit$src_y, /m4_out_flit$vc']));
+                     \$display("\|m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,['%2h\%1h\|'])   \|m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,['\%2h\%1h\|'])"m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,[', /m4_gen_flit$pkt_cnt, /m4_gen_flit$flit_cnt'])m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,[', /m4_out_flit$pkt_cnt, /m4_out_flit$flit_cnt']));
                      if (y < M4_YY_MAX) begin
-                        \$display("+   +");
+                        \$display("+m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,---+)   +m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH,---+)");
                      end
                   end
-                  \$display("\\\\---/   \\\\---/");
+                  \$display("\\\\m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH-1,---+)---/   \\\\m4_forloop(m4_x,M4_XX_LOW,M4_XX_HIGH-1,---+)---/");
                end
             end
       @2
