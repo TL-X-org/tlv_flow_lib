@@ -25,8 +25,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// TODO: $trans_avail => $avail
-//       $valid => $accepted
+// TODO: $valid => $accepted
 //       Provide $accepted in input stage of each macro.
 
 // =====================================================
@@ -56,8 +55,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // From upstream:
 //   |_pipe
 //      @_stage
-//         $avail   // A transaction is available for consumption.
-//         ?$avail  // (though downstream should consume on ?$accepted)
+//         $avail         // A transaction is available for consumption.
+//         ?$avail        // (though downstream should consume on ?$accepted)
 //            $ANY        // input transaction
 // From downstream:
 //   |_pipe
@@ -149,7 +148,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Input interface:
 //   |_in_pipe
 //      @_in_stage  (minus a phase for SELF)
-//         $trans_avail   // A transaction is available for consumption.
+//         $avail         // A transaction is available for consumption.
 //         ?$avail
 //            $ANY        // input transaction
 //   |_out_pipe
@@ -187,10 +186,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    |_out_pipe
       @m4_stage_eval(@_out_stage - m4_b_latch <<1)['']m4_post_latch_phase
-         $avail = (>>1$avail && >>1$blocked) ||  // Recirc'ed or
-                        // Above is recomputation of $recirc to avoid a flop.
-                        // For SELF, its in the same stage, and is redundant computation.
-                        /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage<<1)$avail; // Incoming available
+         $reset = /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage)$reset;
+         
+         $avail = $reset ? 1'b0 :
+                           (>>1$avail && >>1$blocked) ||  // Recirc'ed or
+                           // Above is recomputation of $recirc to avoid a flop.
+                           // For SELF, its in the same stage, and is redundant computation.
+                           /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage<<1)$avail; // Incoming available
          //$first_avail = $avail && ! >>1$blocked;  // Transaction is newly available.
       @m4_stage_eval(@_out_stage<<1)m4_pre_latch_phase
          ?$avail  // Physically, $first_avail && *reset_b for functional gating in
@@ -203,7 +205,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          $recirc = $avail && $blocked;  // Available transaction that is blocked; must recirc.
    |_in_pipe
       @m4_stage_eval(@_in_stage - m4_b_latch)['']m4_post_latch_phase
-         $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;       
+         $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;
          // This trans is blocked (whether valid or not) if the next stage is recirculating.
          $accepted = $avail && ! $blocked;
          `BOGUS_USE($accepted)  // provided for optional upstream use.
@@ -230,7 +232,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Input interface:
 //   |_name#_input_stage
 //      @1
-//         $avail   // A transaction is available for consumption.
+//         $avail         // A transaction is available for consumption.
 //         ?avail
 //            $ANY        // input transaction.
 //   |_name#_output_stage
@@ -244,7 +246,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                        // and must recirculate.
 //   |_name#_output_stage
 //      @1
-//         $avail   // A transaction is available for consumption.
+//         $avail         // A transaction is available for consumption.
 \TLV bp_pipeline(/_top, |_name, #_first_stage, #_last_stage, /_trans)
    m4_forloop(['m4_stage'], #_first_stage, #_last_stage, ['
    m4+bp_stage(/_top, |_name['']m4_stage, @1, |_name['']m4_eval(m4_stage + 1), @1, /_trans)
@@ -273,7 +275,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   |_in_pipe
 //      @_in_stage
 //         $reset         // A reset signal.
-//         $avail   // A transaction is available for consumption.
+//         $avail         // A transaction is available for consumption.
 //         ?avail
 //            /_trans
 //               $ANY     // input transaction
@@ -289,7 +291,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   |_out_pipe
 //      @_out_stage
 //         $reset         // The reset signal (from input pipeline).
-//         $avail   // A transaction is available for consumption.
+//         $avail         // A transaction is available for consumption.
 //         ?avail
 //            /_trans
 //               $ANY     // Output transaction
@@ -299,7 +301,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    |_in_pipe
       @_in_stage
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$blocked;
-         $accepted = $trans_avail && ! $blocked;
+         $accepted = $avail && ! $blocked;
          `BOGUS_USE($accepted)  // provided for optional upstream use.
    |_out_pipe
       @_out_stage
@@ -307,14 +309,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          //   but similar to reverse path for $blocked).
          $reset = /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage)$reset;
          
-         $trans_avail = $reset      ? 1'b0 :
-                        >>1$blocked ? >>1$trans_avail :
-                                      /_top|_in_pipe>>m4_align(@_in_stage >> 1, @_out_stage)$trans_avail;
-         ?$trans_avail
+         $avail = $reset      ? 1'b0 :
+                  >>1$blocked ? >>1$avail :
+                                /_top|_in_pipe>>m4_align(@_in_stage >> 1, @_out_stage)$avail;
+         ?$avail
             /_trans
          m4_trans_ind   $ANY = |_out_pipe>>1$blocked ? >>1$ANY : /_top|_in_pipe/_trans>>m4_align(@_in_stage >> 1, @_out_stage)$ANY;
    m4_popdef(['m4_trans_ind'])
-
 
 // A Stall Pipeline.
 //
@@ -322,8 +323,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   |_name#_first_stage
 //      @0
 //         $reset         // A reset signal.
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
+//         $avail         // A transaction is available for consumption.
+//         ?trans_valid = $avail && ! $blocked
 //            /trans
 //               $ANY     // input transaction.
 //   |_name#_last_stage
@@ -336,7 +337,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   |_name#_last_stage
 //      @0
 //         $reset         // The reset signal from the input pipeline.
-//         $trans_avail   // A transaction is available for consumption.
+//         $avail         // A transaction is available for consumption.
 //         $trans_valid   // The transaction is valid.
 //         ?$trans_valid
 //            /trans
@@ -373,8 +374,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Input interface:
 //   |in_pipe
 //      @in_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
+//         $avail         // A transaction is available for consumption.
+//         ?trans_valid = $avail && ! $blocked
 //            $ANY        // input transaction
 //   |out_pipe
 //      @out_stage
@@ -387,8 +388,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                        // and must recirculate.
 //   |out_pipe
 //      @out_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid   // $trans_avail && ! $blocked
+//         $avail         // A transaction is available for consumption.
+//         ?trans_valid   // $avail && ! $blocked
 //            $ANY        // Output transaction
 
 \TLV self_cycle(/_top,|_in_pipe,@_in_stage,|_mid_pipe,@_mid_stage,|_out_pipe,@_out_stage,/_trans)
@@ -418,8 +419,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Input interface:
 //   |m4_in_pipe
 //      @m4_in_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         ?trans_valid = $trans_avail && ! $blocked
+//         $avail         // A transaction is available for consumption.
+//         ?trans_valid = $avail && ! $blocked
 //            $ANY        // input transaction.
 //   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
 //      @1
@@ -432,7 +433,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                        // and must recirculate.
 //   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
 //      @1
-//         $trans_avail   // A transaction is available for consumption.
+//         $avail         // A transaction is available for consumption.
 \TLV self_pipeline(/_top, |_name, |_in_pipe, @_in_stage, #_first_phase, #_last_phase, |_out_pipe, @_out_stage,/_trans)
    /* DEBUG:
    self_pipeline (/_top, |_name, |_in_pipe, @_in_stage, @_first_phase, @_last_phase, |_out_pipe, @_out_stage)
@@ -461,8 +462,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   |in_pipe
 //      @in_stage
 //         $reset         // A reset signal.
-//         $trans_avail   // A transaction is available for consumption.
-//         $trans_valid   // = $trans_avail && ! $blocked;
+//         $avail         // A transaction is available for consumption.
+//         $trans_valid   // = $avail && ! $blocked;
 //         ?$trans_valid
 //            $ANY        // Input transaction (under trans if non-empty)
 //   |out_pipe
@@ -476,8 +477,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                        // and must recirculate.
 //   |out_pipe
 //      @out_stage
-//         $trans_avail   // A transaction is available for consumption.
-//         $trans_valid = $trans_avail && ! $blocked
+//         $avail         // A transaction is available for consumption.
+//         $trans_valid = $avail && ! $blocked
 //      @out_stage
 //         ?$trans_valid
 //            $ANY        // Output transaction (under trans if given)
@@ -526,13 +527,13 @@ m4_unsupported(['m4_flop_fifo'], 1)
          $out_blocked = /_top|_out_pipe>>m4_bypass_align$blocked;
          $blocked = >>1$full && $out_blocked;
          `BOGUS_USE($blocked)   // Not required to be consumed elsewhere.
-         $accepted = $trans_avail && ! $blocked;
+         $accepted = $avail && ! $blocked;
          `BOGUS_USE($accepted)  // provided for optional upstream use.
          $would_bypass = >>1$empty;
          $bypass = $would_bypass && ! $out_blocked;
          $push = $trans_valid && ! $bypass;
          $grow   =   $trans_valid &&   $out_blocked;
-         $shrink = ! $trans_avail && ! $out_blocked && ! >>1$empty;
+         $shrink = ! $avail && ! $out_blocked && ! >>1$empty;
          $valid_count[m4_counter_width-1:0] = $reset ? '0
                                                      : >>1$valid_count + (
                                                           $grow   ? { {(m4_counter_width-1){1'b0}}, 1'b1} :
@@ -591,8 +592,8 @@ m4_unsupported(['m4_flop_fifo'], 1)
             m4_trans_ind   $ANY = ((entry == 0) ? '0 : /entry[(entry+(#_depth)-1)%(#_depth)]/accum['']/_trans$ANY) |
                              /entry/read_masked['']/_trans$ANY;
          /head
-            $trans_avail = |_out_pipe$trans_avail;
-            ?$trans_avail
+            $avail = |_out_pipe$avail;
+            ?$avail
                /_trans
             m4_trans_ind   $ANY = /_top|_out_pipe/entry[(#_depth)-1]/accum['']/_trans$ANY;
    // Bypass
@@ -601,14 +602,14 @@ m4_unsupported(['m4_flop_fifo'], 1)
          // Available output.  Sometimes it's necessary to know what would be coming to determined
          // if it's blocked.  This can be used externally in that case.
          /fifo_head
-            $trans_avail = |_out_pipe$trans_avail;
-            ?$trans_avail
+            $avail = |_out_pipe$avail;
+            ?$avail
                /_trans
             m4_trans_ind   $ANY = /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass
             m4_trans_ind                ? /_top|_in_pipe['']/_trans>>m4_reverse_bypass_align$ANY
             m4_trans_ind                : |_out_pipe/head['']/_trans$ANY;
-         $trans_avail = ! /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass || /_top|_in_pipe>>m4_reverse_bypass_align$trans_avail;
-         $trans_valid = $trans_avail && ! $blocked;
+         $avail = ! /_top|_in_pipe>>m4_reverse_bypass_align$would_bypass || /_top|_in_pipe>>m4_reverse_bypass_align$avail;
+         $trans_valid = $avail && ! $blocked;
          ?$trans_valid
             /_trans
          m4_trans_ind   $ANY = |_out_pipe/fifo_head['']/_trans$ANY;
@@ -687,8 +688,8 @@ m4_unsupported(['m4_flop_fifo'], 1)
               .cnt($$cnt[2:0]));
    |_out_pipe
       @_out_at
-         $trans_avail = /_top/fifo>>m4_align(0, @_out_at)$cnt != 3'b0 || /_top|_in_pipe>>m4_align(@_in_at, @m4_out_at)$trans_avail;
-         $trans_valid = $trans_avail && !$blocked;
+         $avail = /_top/fifo>>m4_align(0, @_out_at)$cnt != 3'b0 || /_top|_in_pipe>>m4_align(@_in_at, @m4_out_at)$avail;
+         $trans_valid = $avail && !$blocked;
 
 
 
@@ -707,7 +708,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
       @_in
          $out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
          $blocked = (/_top/fifo>>m4_align(0, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
-         $accepted = $trans_avail && ! $blocked;
+         $accepted = $avail && ! $blocked;
          `BOGUS_USE($accepted)  // provided for optional upstream use.
    /fifo
       simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
@@ -719,8 +720,8 @@ m4_unsupported(['m4_flop_fifo'], 1)
               .cnt($$cnt[2:0]));
    |_out
       @_out
-         $trans_avail = /_top/fifo>>m4_align(0, @_out)$cnt != 3'b0 || /_top|_in>>m4_align(@_in, @_out)$trans_avail;
-         $trans_valid = $trans_avail && !$blocked;
+         $avail = /_top/fifo>>m4_align(0, @_out)$cnt != 3'b0 || /_top|_in>>m4_align(@_in, @_out)$avail;
+         $trans_valid = $avail && !$blocked;
 
 
 
@@ -768,7 +769,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //            $ANY        // Output transaction (under trans if given)
 
 // Backpressure ($blocked, $full, $ValidCount) signals are per /vc; $trans_valid is a singleton
-// for input and output and must consider per-VC backpressure; $trans_avail is not produced on
+// for input and output and must consider per-VC backpressure; $avail is not produced on
 // output and should not be assigned externally for input.
 //
 
@@ -786,7 +787,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
             //
             $reset = /_top|_in_pipe$reset;
             $trans_valid = $vc_trans_valid && ! /vc|_out_pipe>>m4_bypass_align$bypassed_fifos_for_this_vc;
-            $trans_avail = $trans_valid;
+            $avail = $trans_valid;
             ?$trans_valid
                /_trans
             m4_trans_ind   $ANY = /_top|_in_pipe['']/_trans$ANY;
@@ -798,7 +799,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
    /vc[*]
       |_out_pipe
          @m4_arb_at
-            $arbing = $trans_avail && $has_credit;
+            $arbing = $avail && $has_credit;
             /prio[_prio_range]
                // Decoded priority.
                $Match <= #prio == |_out_pipe$Prio;
@@ -826,7 +827,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          @m4_arb_at
             /vc[_vc_range]
                // Trans available for this prio/VC?
-               $avail_within_prio = /_top/vc|_out_pipe$trans_avail &&
+               $avail_within_prio = /_top/vc|_out_pipe$avail &&
                                     /_top/vc|_out_pipe/prio$Match;
             // Is this priority available in FIFOs.
             $avail = | /vc[*]$avail_within_prio;
@@ -890,9 +891,9 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   /hop[*]
 //      |in_pipe
 //         @in_stage
-//            $trans_avail   // A transaction is available for consumption.
+//            $avail         // A transaction is available for consumption.
 //         @in_stage
-//            ?trans_valid = $trans_avail && ! $blocked
+//            ?trans_valid = $avail && ! $blocked
 //               $dest       // Destination hop
 //         @(in_stage+1)
 //            ?trans_valid
@@ -909,9 +910,9 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //            $blocked       // The corresponding input transaction, if valid, cannot be consumed.
 //      |out_pipe
 //         @out_stage
-//            $trans_avail   // A transaction is available for consumption.
+//            $avail         // A transaction is available for consumption.
 //         @(out_stage+1)
-//            ?trans_valid = $trans_avail && ! $blocked
+//            ?trans_valid = $avail && ! $blocked
 //               $ANY        // Output transaction
 // Arguments:
 //   /_hop: The beh hier for a ring hop/stop.
@@ -1043,18 +1044,18 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 
 \TLV simple_flow_macro_testbench()
    |pipe1
-      @1
+      @0
          $reset = /top<>0$reset;
-         m4_rand($trans_avail, 0, 0)
-         $trans_valid = $trans_avail && ! $blocked;
-         $Cnt[7:0] <= $reset       ? '0 :
-                      $trans_valid ? $Cnt + 8'b1 :
-                                     $RETAIN;
+      @1
+         m4_rand($avail, 0, 0)
+         $Cnt[7:0] <= $reset    ? '0 :
+                      $accepted ? $Cnt + 8'b1 :
+                                  $RETAIN;
          // Count the number of times backpressure is applied to an available transaction since the last.
-         $BackpressureCnt[7:0] <= $reset || $trans_valid   ? '0 :
-                                  $trans_avail && $blocked ? $BackpressureCnt + 8'b1 :
-                                                             $RETAIN;
-         ?$trans_valid
+         $BackpressureCnt[7:0] <= $reset || $accepted ? '0 :
+                                  $avail && $blocked  ? $BackpressureCnt + 8'b1 :
+                                                        $RETAIN;
+         ?$accepted
             /trans
                $cnt[7:0] = |pipe1$Cnt;
                // Flag whether this transaction was backpressured.
@@ -1063,23 +1064,22 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
    |pipe3
       @1
          //$reset = /top<>0$reset;
-         $Cnt[7:0] <= $reset ? '0 :
-                      $trans_valid ? $Cnt + 8'b1 :
-                                     $RETAIN;
+         $accepted = $avail && ! $blocked;
+         $Cnt[7:0] <= $reset    ? '0 :
+                      $accepted ? $Cnt + 8'b1 :
+                                  $RETAIN;
          // Block output with 5/8 probability.
          m4_rand($blocked_rand, 2, 0)
          $blocked = $blocked_rand < 3'd5;
-         ?$trans_valid
+         ?$accepted
             /trans
                `BOGUS_USE($cnt)
-         $Error <= $reset       ? '0 :
-                   $trans_valid ? $Error || (/trans$cnt != $Cnt) :
+         $Error <= $reset    ? '0 :
+                   $accepted ? $Error || (/trans$cnt != $Cnt) :
                    $RETAIN;
          // Sticky indication that there was a backpressured transaction.
-         $BackpressureApplied <= $reset       ? 1'b0 :
-                                 $trans_valid ? $BackpressureApplied || /trans$backpressured :
-                                                $RETAIN;
+         $BackpressureApplied <= $reset    ? 1'b0 :
+                                 $accepted ? $BackpressureApplied || /trans$backpressured :
+                                             $RETAIN;
          
          $passed = $Cnt > 8 && ! $Error && $BackpressureApplied;
-
-      

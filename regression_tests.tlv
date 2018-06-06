@@ -39,15 +39,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    /stall_pipeline_test
       m4+simple_flow_macro_testbench()
       m4+stall_pipeline(/stall_pipeline_test, |pipe, 1, 3, /trans)
-   ///bp_pipeline_test
-   //   m4+simple_flow_macro_testbench()
-   //   m4+bp_pipeline(/bp_pipeline_test, |pipe, 1, 3, /trans)
+   /bp_pipeline_test
+      m4+simple_flow_macro_testbench()
+      m4+bp_pipeline(/bp_pipeline_test, |pipe, 1, 3, /trans)
 
    *passed = *cyc_cnt > 100 &&
              (/top/stall_stage_test|pipe3>>1$passed ||
               /top/stall_pipeline_test|pipe3>>1$passed ||
-              // /top/bp_pipeline_test|pipe3<>0$passed ||
+              /top/bp_pipeline_test|pipe3>>1$passed ||
               1'b0);
    *failed = *cyc_cnt > 102;
+   
 \SV
    endmodule
