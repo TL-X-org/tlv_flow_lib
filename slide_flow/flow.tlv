@@ -30,19 +30,18 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/fundamentals_lib.tlv'])
-m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
+m4_include_url(['https:/']['/raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/fundamentals_lib.tlv'])
+m4_include_url(['https:/']['/raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
 
+//m4_top_module_def(top)
 m4_makerchip_module()
-/* verilator lint_off UNOPTFLAT */  // Probably want to make this a default in Makerchip. See what happens when uprev'ed to 1d.
 
-
-parameter RING_STOPS = 4;
-m4_define(M4_RING_STOPS_WIDTH, 2)
-parameter RING_STOPS_WIDTH = M4_RING_STOPS_WIDTH;  //$clog2(RING_STOPS); // roundup(log2(RING_STOPS))
+m4_define_hier(M4_RING_STOP, 4, 0)
+//parameter RING_STOPS = 4;
+//m4_define(M4_RING_STOPS_WIDTH, 2)
+//parameter RING_STOPS_WIDTH = M4_RING_STOPS_WIDTH;  //$clog2(RING_STOPS); // roundup(log2(RING_STOPS))
 m4_define(M4_PACKET_SIZE, 16)
 parameter PACKET_SIZE = M4_PACKET_SIZE;
-
 
 
 
@@ -61,8 +60,7 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
             /_trans
          m4_trans_ind   $ANY = |arb_out$bypass ? /ring_stop/stall_pipe|_in2/_trans>>1$ANY :
                                         /_top_in1|_in1/_trans>>1$ANY;
-
-m4_popdef(['m4_trans_ind'])
+   m4_popdef(['m4_trans_ind'])
 
 \SV
    bit n_clk;
@@ -79,20 +77,18 @@ m4_popdef(['m4_trans_ind'])
                always_ff @(posedge clk) begin
                   \$display("Cycle: %0d", $CycCount);
                end
-      /ring_stop[RING_STOPS-1:0]
+      /M4_RING_STOP_HIER
          // STIMULUS
          |send
             @0
                $valid_in = /tb|count<>0$CycCount == 3;
                ?$valid_in
                   /gen_trans
-                     $sender[RING_STOPS_WIDTH-1:0] = ring_stop;
+                     $sender[M4_RING_STOP_INDEX_RANGE] = ring_stop;
                      //m4_rand($size, M4_PACKET_SIZE-1, 0, ring_stop) // unused
-                     m4_rand($dest_tmp, M4_RING_STOPS_WIDTH-1, 0, ring_stop)
-                     /* verilator lint_off WIDTH */
-                     $dest[RING_STOPS_WIDTH-1:0] = ($dest_tmp + RING_STOPS) % RING_STOPS;
-                     /* verilator lint_on WIDTH */
-                     //$dest[RING_STOPS_WIDTH-1:0] = ring_stop;
+                     m4_rand($dest_tmp, M4_RING_STOP_INDEX_MAX, 0, ring_stop)
+                     $dest[M4_RING_STOP_INDEX_RANGE] = $dest_tmp % M4_RING_STOP_CNT;
+                     //$dest[M4_RING_STOP_INDEX_RANGE] = ring_stop;
                      //$packet_valid = ring_stop == 0 ? 1'b1 : 1'b0; // valid for only first ring_stop - unused
                $trans_valid = $valid_in || /ring_stop|receive<>0$request;
                ?$trans_valid
@@ -120,11 +116,11 @@ m4_popdef(['m4_trans_ind'])
                ?$trans_valid
                   /trans
                      $ANY = /top/ring_stop/pipe2|fifo2_out/trans>>1$ANY;
-                     $dest[RING_STOPS_WIDTH-1:0] = |receive$request ? $sender : $dest;
+                     $dest[M4_RING_STOP_INDEX_RANGE] = |receive$request ? $sender : $dest;
       |pass
          @0
             $reset = /top|default>>1$reset;
-            $packets[RING_STOPS*PACKET_SIZE-1:0] = /tb/ring_stop[*]|receive<>0$NumPackets;
+            $packets[M4_RING_STOP_CNT * PACKET_SIZE - 1 : 0] = /tb/ring_stop[*]|receive<>0$NumPackets;
             *passed = !$reset && ($packets == '0) && (/tb|count<>0$CycCount > 3);
    
    // Reset as a pipesignal.
@@ -133,7 +129,7 @@ m4_popdef(['m4_trans_ind'])
          $reset = *reset;
 
    // Ring
-   /ring_stop[RING_STOPS-1:0]
+   /ring_stop[M4_RING_STOP_RANGE]
       |ring_in
          @0
             $reset = /top|default>>1$reset;
