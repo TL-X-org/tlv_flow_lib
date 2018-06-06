@@ -876,13 +876,15 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 
 // A simple ring.
 //
-// One transaction per cycle, which yields to the transaction on the ring.
+// Creates N ring stops, where a transaction can be injected into the ring (if not blocked) at any
+// ring stop, destined for any other stop. The transaction is a simple TLV transaction. It traverses
+// the ring from index 0 to N-1 continuing back to 0, one ring stop each cycle, until it reaches
+// its destination. Destinations must accept the transaction and cannot block.
 //
-// m4_simple_ring(hop, in_pipe, in_stage, out_pipe, out_stage, reset_scope, reset_stage, reset_sig)
-//   hop:                   The name of the beh hier for a ring hop/stop.
-//   [in/out]_[pipe/stage]: The pipeline name and stage of the input and output for the control logic
-//                          in each hop. (Data is a cycle behind.)
-//   reset_[scope/stage/sig]: The fully qualified reset signal and stage.
+// This macro implements a bi-directional "avail/blocked" interface at each ring stop. However,
+// backpressure is not supported at the output, so the downstream logic must provide $blocked = 1'b0,
+// and data muxing is one cycle behind the control logic and therefore one cycle behind the convention
+// for flow macros (including at the downstream interface).
 //
 // Input interface:
 //   /hop[*]
@@ -898,31 +900,44 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   /hop[*]
 //      |out_pipe
 //         @out_stage
-//            $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                           // and will recirculate.
+//            $blocked       // The corresponding output transaction, if valid, cannot be consumed.
+//                           // Backpressure is not supported at the output, so $blocked must be 1'b0.
 // Output interface:
 //   /hop[*]
 //      |in_pipe
 //         @in_stage
-//            $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                           // and must recirculate.
+//            $blocked       // The corresponding input transaction, if valid, cannot be consumed.
 //      |out_pipe
 //         @out_stage
 //            $trans_avail   // A transaction is available for consumption.
 //         @(out_stage+1)
 //            ?trans_valid = $trans_avail && ! $blocked
 //               $ANY        // Output transaction
+// Arguments:
+//   /_hop: The beh hier for a ring hop/stop.
+//   [|/@][_in/_out]_[pipe/stage]:
+//          The pipeline name and stage of the input and output according to the conventions of
+//          the "avail/blocked" interface. Control logic is performed in the given stages, and
+//          data MUXing is a cycle behind.)
+//   reset_[scope/stage/sig]:
+//          The fully qualified reset signal and stage.
+// Other inputs:
+//   M4 constants must be defined as created by a call to m4_define_hier(..) corresponding to /_hop,
+//   and /_hop must have a low index of 0.
+//
 \TLV simple_ring(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, /_reset_scope, @_reset_at, $_reset_sig, |_name, /_trans)
    m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
-
+   m4_pushdef(['m4_hop_name'], m4_strip_prefix(/_hop))
+   m4_pushdef(['M4_HOP'], ['M4_']m4_translit(m4_hop_name, ['a-z'], ['A-Z']))
+   
    // Logic
    /_hop[*]
       |default
          @0
             \SV_plus
-               int prev_hop = (m4_strip_prefix(/_hop) + RING_STOPS - 1) % RING_STOPS;
+               int prev_hop = (m4_hop_name + M4_HOP['']_CNT - 1) % M4_HOP['']_CNT;
       |_in_pipe
          @_in_at
             $blocked = /_hop|_name<>0$passed_on;
@@ -934,7 +949,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
             $valid = ! /_reset_scope>>m4_align(@_reset_at, @_in_at)$_reset_sig &&
                      ($passed_on || /_hop|_in_pipe<>0$avail);
             $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
-            $dest[RING_STOPS_WIDTH-1:0] =
+            $dest[M4_HOP['']_INDEX_RANGE] =
                $passed_on
                   ? /_hop[prev_hop]|_name>>1$dest
                   : /_hop|_in_pipe/_trans<>0$dest;
@@ -949,15 +964,17 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          // Ring out
          @_out_at
             $avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
-            $blocked = 1'b0;
-            $trans_valid = $avail && ! $blocked;
+            //$blocked = 1'b0;
+            $trans_valid = $avail; // && ! $blocked;
          ?$trans_valid
             @m4_stage_eval(@_out_at + 1)
                /_trans
             m4_trans_ind   $ANY = /_hop|_name/_trans>>m4_in_out_align$ANY;
-m4_popdef(['m4_out_in_align'])
-m4_popdef(['m4_in_out_align'])
-m4_popdef(['m4_trans_ind'])
+   m4_popdef(['m4_out_in_align'])
+   m4_popdef(['m4_in_out_align'])
+   m4_popdef(['m4_trans_ind'])
+   m4_popdef(['m4_hop_name'])
+   m4_popdef(['M4_HOP'])
 
 
 // A one-cycle speculation flow.
@@ -1019,20 +1036,6 @@ m4_popdef(['m4_trans_ind'])
             $valid = (/_top|_in_pipe<>0$valid && ! /_top|_in_pipe/comp<>0$mispred) || $delayed;
    m4_popdef(['m4_trans_ind'])
 
-\TLV arb(/_top_in1,/_top_in2,|_in1,|_in2,|_arb_out)
-   |_arb_out
-      @0
-         // bypass if pipe1 does not have a valid transaction and FIFO does
-         // and packet's destination is same as ring_stop
-         $bypass = !(/_top_in1|_in1>>1$trans_valid) &&
-                   /_top_in2|_in2>>1$trans_valid &&
-                   /_top_in2|_in2/trans>>1$dest == ring_stop;
-         $trans_valid = $bypass ||
-                        /_top_in1|_in1>>1$trans_valid;
-         ?$trans_valid
-            /trans
-               $ANY = |_arb_out$bypass ? /_top_in2|_in2/trans>>1$ANY :
-                                        /_top_in1|_in1/trans>>1$ANY;
 
 
 // ==================
