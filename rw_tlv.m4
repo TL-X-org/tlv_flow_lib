@@ -370,7 +370,7 @@ m4_define(['m4_into_fields'], ['{m4_into_fields_lhs(['$2'], [''], $1_FIELDS)['} 
    /_hier[*]
       $_sig['']_cond = $_cond_expr ? $_sig : $_init_expr ;
    \always_comb
-      $_redux_sig = $_init_expr ;
+      $['']$_redux_sig = $_init_expr ;
       for (int i = #_MIN; i <= #_MAX; i++)
          $_redux_sig = $_redux_sig _op /_hier[i]$_sig;
 
