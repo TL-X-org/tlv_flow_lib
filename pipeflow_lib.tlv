@@ -28,7 +28,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // =====================================================
 // A TLV M4 library file for transaction flow components
 // =====================================================
-// Relies on macros defined in generic_tlv.m4 and rw_tlv.m4.
+
+// This library relies on macros defined in generic_tlv.m4 and rw_tlv.m4.
 // See comments in rw_tlv.m4 describing conventions for TLV M4 library files.
 
 // Macros defined in this file provide a few standard interfaces so that macros
@@ -88,24 +89,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-
-
-
-
-//=================
-// Arbitration
+//===============================
 //
-
-// Credit counter.
-// m4_credit_counter(CreditState, MAX_BIT, MAX_CREDIT, reset, incr_sig, decr_sig, ind)
-// Eg: m4+credit_counter($Credit, 4, 10, /top|rs<>0$reset, $credit_returned, $credit_consumed)
-\TLV credit_counter($_Credit, #_MAX_BIT, #_MAX_CREDIT, $_reset, $_incr, $_decr)
-   $credit_upd = $_reset || ($_incr ^ $_decr);
-   ?$credit_upd
-      $_Credit[#_MAX_BIT:0] <=
-           $_reset
-              ? m4_eval(#_MAX_BIT + 1)'d['']#_MAX_CREDIT
-              : ($_Credit + ($_incr ? m4_eval(#_MAX_BIT + 1)'d1 : '1));
+// Combinational Flow Components
+//
 
 
 
@@ -172,6 +159,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          `BOGUS_USE($accepted)  // provided for optional upstream use.
    m4_popdef(['m4_trans_ind'])
 
+
 // A 1-in 1-out "avail/blocked" flow component, whose output is simply, the input
 // with the transaction unconditioned.
 // This is useful for phase-based logic which isn't fully ironed-out yet, and currently
@@ -190,6 +178,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          /_trans
       m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_out)$ANY;
 
+
+
+
+
+//========================================
+//
+// 1-In 1-Out Flow Components
+//
 
 
 // A backpressured flop or latch stage.
@@ -319,8 +315,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 
-// ==========================================================
-//
+// -------------------------
 // Stall Pipeline
 //
 
@@ -381,6 +376,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          m4_trans_ind   $ANY = |_out_pipe>>1$blocked ? >>1$ANY : /_top|_in_pipe/_trans>>m4_align(@_in_stage >> 1, @_out_stage)$ANY;
    m4_popdef(['m4_trans_ind'])
 
+
 // A Stall Pipeline.
 //
 // Input interface:
@@ -414,105 +410,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    //
 
 
-
-
-// ==========================================================
+// -------------------------
+// FIFOs
 //
-// SELF (Synchronous ELastic Flow) pipelines.
-//
-
-// One cycle of a SELF pipeline.
-// m4_self_cycle(top, in_pipe, in_stage, mid_pipe, mid_stage, out_pipe, out_stage[, indentation_str])
-//   top:                   eg: 'top'
-//   in/mid/out_pipe/stage: The pipeline name and stage number of the input (A-phase) stage
-//                          and the output stage.
-//   indentation_str:       eg: '   ' to provide 1 additional level of indentation
-//
-// This creates backpressure and recirculation for a transaction going from in_pipe to out_pipe,
-// where in_pipe/stage is one cycle from out pipe/stage without backpressure.  There are two
-// stages of backpressure, one A-phase, and one B-phase.
-//
-// Currently, this uses recirculation, but it is intended to be modified to use latch enables
-// to hold the transactions.
-//
-// Input interface:
-//   |in_pipe
-//      @in_stage
-//         $avail         // A transaction is available for consumption.
-//         ?trans_valid = $avail && ! $blocked
-//            $ANY        // input transaction
-//   |out_pipe
-//      @out_stage
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output signals:
-//   |in_pipe
-//      @in_stage
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |out_pipe
-//      @out_stage
-//         $avail         // A transaction is available for consumption.
-//         ?trans_valid   // $avail && ! $blocked
-//            $ANY        // Output transaction
-
-\TLV self_cycle(/_top,|_in_pipe,@_in_stage,|_mid_pipe,@_mid_stage,|_out_pipe,@_out_stage,/_trans)
-   m4+bp_stage(/_top, |_in_pipe,  @_in_stage,           |_mid_pipe, @_mid_stage, /_trans, 1, 0)  // Not sure indentation is passed right.
-   m4+bp_stage(/_top, |_mid_pipe, m4_decr(@_mid_stage), |_out_pipe, @_out_stage, /_trans, 0, 1)
-
-
-
-// A SELF pipeline.
-// m4_self_pipeline(top, name, in_pipe, in_stage, first_phase, last_phase[, out_pipe, out_stage])
-//
-// m4_first_phase should be odd, m4_last_phase should be even.
-// This creates recirculation from m4_first_phase to m4_last_phase.
-//   (m4_last_phase - m4_first_phase + 1 recirculations).  Each phase from m4_first_phase
-//   to m4_last_phase is a pipeline for transactions from a recirculation mux in @0/@0L (odd/even
-//   phase) (soon to be clock gating with a @0/@0L enable), where transaction logic is intended
-//   for @0L/@1 (odd/even).
-//
-// Transaction logic can be defined externally, and spread across the SELF pipeline.
-// The transaction should come in on:
-//   |m4_in_pipe@m4_in_stage (would align to: |m4_name[''](m4_first_phase-1)@1)
-// and transaction logic placed in:
-//   |m4_name['']m4_phase@0L(if even phase)/1(if odd phase)
-// and the transaction leaves from:
-//   |m4_name['']m4_last_phase@0 or |m4_out_pipe@(m4_out_stage-1)
-//
-// Input interface:
-//   |m4_in_pipe
-//      @m4_in_stage
-//         $avail         // A transaction is available for consumption.
-//         ?trans_valid = $avail && ! $blocked
-//            $ANY        // input transaction.
-//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
-//      @1
-//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
-//                        // and will recirculate.
-// Output signals:
-//   |m4_in_pipe
-//      @m4_in_stage
-//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
-//                        // and must recirculate.
-//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
-//      @1
-//         $avail         // A transaction is available for consumption.
-\TLV self_pipeline(/_top, |_name, |_in_pipe, @_in_stage, #_first_phase, #_last_phase, |_out_pipe, @_out_stage,/_trans)
-   m4_forloop(['m4_cycle'], 0, m4_eval((#_last_phase - #_first_phase) / 2), ['
-   m4_pushdef(['m4_phase'], m4_eval(']#_first_phase[' + (m4_cycle * 2)))
-   m4_pushdef(['m4_in_p'], m4_ifelse(m4_cycle, 0, ']|_in_pipe[',  ']|_name['['']m4_decr(m4_phase)))
-   m4_pushdef(['m4_in_s'], m4_ifelse(m4_cycle, 0, ']@_in_stage[', 1))
-   m4_pushdef(['m4_out_p'], m4_ifelse(m4_ifelse(']|_out_pipe[', , NO_MATCH, )m4_cycle, m4_eval((']#_last_phase - #_first_phase[') / 2), ']|_out_pipe[', ']|_name['['']m4_incr(m4_phase)))
-   m4_pushdef(['m4_out_s'], m4_ifelse(m4_ifelse(']@_out_stage[', , NO_MATCH, )m4_cycle, m4_eval((']#_last_phase - #_first_phase[') / 2), ']@_out_stage[', 1))
-   m4+self_cycle(']/_top[', m4_in_p, m4_in_s,']|_name['['']m4_phase, 1, m4_out_p, m4_out_s),/_trans)
-   
-   m4_popdef(['m4_phase'])
-   m4_popdef(['m4_in_p'])
-   m4_popdef(['m4_in_s'])
-   m4_popdef(['m4_out_p'])
-   m4_pushdef(['m4_out_s'])'])
-   
 
 // A simple flop-based FIFO with entry-granular clock gating.
 // Note: Simulation is less efficient due to the explicit clock gating.
@@ -935,6 +835,24 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 
 
 
+//========================================
+//
+// N-to-1 Flow Components
+//
+
+
+
+//========================================
+//
+// 1-to-N Flow Components
+//
+
+
+//========================================
+//
+// N-to-N Flow Components
+//
+
 
 // A simple ring.
 //
@@ -1038,6 +956,13 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
    m4_popdef(['M4_HOP'])
 
 
+
+//========================================
+//
+// Uncategorized
+//
+
+
 // A one-cycle speculation flow.
 // m4+1cyc_speculate(m4_top, m4_in_pipe, m4_out_pipe, m4_spec_stage, m4_comp_stage, m4_pred_sigs)
 // Eg:
@@ -1059,8 +984,6 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //          @m4_comp_stage
 //             $valid
 //
-
-
 \TLV 1cyc_speculate(/_top,|_in_pipe,|_out_pipe,@_spec_stage,@_comp_stage,$_pred_sigs,/_trans)
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    |_in_pipe
@@ -1099,9 +1022,130 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 
 
 
-// ==================
-// Macros for Testing
-// ==================
+//=================
+//
+// For Credit Loop
+//
+
+// Credit counter.
+// m4_credit_counter(CreditState, MAX_BIT, MAX_CREDIT, reset, incr_sig, decr_sig, ind)
+// Eg: m4+credit_counter($Credit, 4, 10, /top|rs<>0$reset, $credit_returned, $credit_consumed)
+\TLV credit_counter($_Credit, #_MAX_BIT, #_MAX_CREDIT, $_reset, $_incr, $_decr)
+   $credit_upd = $_reset || ($_incr ^ $_decr);
+   ?$credit_upd
+      $_Credit[#_MAX_BIT:0] <=
+           $_reset
+              ? m4_eval(#_MAX_BIT + 1)'d['']#_MAX_CREDIT
+              : ($_Credit + ($_incr ? m4_eval(#_MAX_BIT + 1)'d1 : '1));
+
+
+
+
+
+//==========================================================
+//
+// SELF (Synchronous ELastic Flow) pipelines.
+//
+
+// One cycle of a SELF pipeline.
+// m4_self_cycle(top, in_pipe, in_stage, mid_pipe, mid_stage, out_pipe, out_stage[, indentation_str])
+//   top:                   eg: 'top'
+//   in/mid/out_pipe/stage: The pipeline name and stage number of the input (A-phase) stage
+//                          and the output stage.
+//   indentation_str:       eg: '   ' to provide 1 additional level of indentation
+//
+// This creates backpressure and recirculation for a transaction going from in_pipe to out_pipe,
+// where in_pipe/stage is one cycle from out pipe/stage without backpressure.  There are two
+// stages of backpressure, one A-phase, and one B-phase.
+//
+// Currently, this uses recirculation, but it is intended to be modified to use latch enables
+// to hold the transactions.
+//
+// Input interface:
+//   |in_pipe
+//      @in_stage
+//         $avail         // A transaction is available for consumption.
+//         ?trans_valid = $avail && ! $blocked
+//            $ANY        // input transaction
+//   |out_pipe
+//      @out_stage
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output signals:
+//   |in_pipe
+//      @in_stage
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |out_pipe
+//      @out_stage
+//         $avail         // A transaction is available for consumption.
+//         ?trans_valid   // $avail && ! $blocked
+//            $ANY        // Output transaction
+
+\TLV self_cycle(/_top,|_in_pipe,@_in_stage,|_mid_pipe,@_mid_stage,|_out_pipe,@_out_stage,/_trans)
+   m4+bp_stage(/_top, |_in_pipe,  @_in_stage,           |_mid_pipe, @_mid_stage, /_trans, 1, 0)  // Not sure indentation is passed right.
+   m4+bp_stage(/_top, |_mid_pipe, m4_decr(@_mid_stage), |_out_pipe, @_out_stage, /_trans, 0, 1)
+
+
+
+// A SELF pipeline.
+// m4_self_pipeline(top, name, in_pipe, in_stage, first_phase, last_phase[, out_pipe, out_stage])
+//
+// m4_first_phase should be odd, m4_last_phase should be even.
+// This creates recirculation from m4_first_phase to m4_last_phase.
+//   (m4_last_phase - m4_first_phase + 1 recirculations).  Each phase from m4_first_phase
+//   to m4_last_phase is a pipeline for transactions from a recirculation mux in @0/@0L (odd/even
+//   phase) (soon to be clock gating with a @0/@0L enable), where transaction logic is intended
+//   for @0L/@1 (odd/even).
+//
+// Transaction logic can be defined externally, and spread across the SELF pipeline.
+// The transaction should come in on:
+//   |m4_in_pipe@m4_in_stage (would align to: |m4_name[''](m4_first_phase-1)@1)
+// and transaction logic placed in:
+//   |m4_name['']m4_phase@0L(if even phase)/1(if odd phase)
+// and the transaction leaves from:
+//   |m4_name['']m4_last_phase@0 or |m4_out_pipe@(m4_out_stage-1)
+//
+// Input interface:
+//   |m4_in_pipe
+//      @m4_in_stage
+//         $avail         // A transaction is available for consumption.
+//         ?trans_valid = $avail && ! $blocked
+//            $ANY        // input transaction.
+//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
+//      @1
+//         $blocked       // The corresponding output transaction, if valid, cannot be consumed
+//                        // and will recirculate.
+// Output signals:
+//   |m4_in_pipe
+//      @m4_in_stage
+//         $blocked       // The corresponding input transaction, if valid, cannot be consumed
+//                        // and must recirculate.
+//   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
+//      @1
+//         $avail         // A transaction is available for consumption.
+\TLV self_pipeline(/_top, |_name, |_in_pipe, @_in_stage, #_first_phase, #_last_phase, |_out_pipe, @_out_stage,/_trans)
+   m4_forloop(['m4_cycle'], 0, m4_eval((#_last_phase - #_first_phase) / 2), ['
+   m4_pushdef(['m4_phase'], m4_eval(']#_first_phase[' + (m4_cycle * 2)))
+   m4_pushdef(['m4_in_p'], m4_ifelse(m4_cycle, 0, ']|_in_pipe[',  ']|_name['['']m4_decr(m4_phase)))
+   m4_pushdef(['m4_in_s'], m4_ifelse(m4_cycle, 0, ']@_in_stage[', 1))
+   m4_pushdef(['m4_out_p'], m4_ifelse(m4_ifelse(']|_out_pipe[', , NO_MATCH, )m4_cycle, m4_eval((']#_last_phase - #_first_phase[') / 2), ']|_out_pipe[', ']|_name['['']m4_incr(m4_phase)))
+   m4_pushdef(['m4_out_s'], m4_ifelse(m4_ifelse(']@_out_stage[', , NO_MATCH, )m4_cycle, m4_eval((']#_last_phase - #_first_phase[') / 2), ']@_out_stage[', 1))
+   m4+self_cycle(']/_top[', m4_in_p, m4_in_s,']|_name['['']m4_phase, 1, m4_out_p, m4_out_s),/_trans)
+   
+   m4_popdef(['m4_phase'])
+   m4_popdef(['m4_in_p'])
+   m4_popdef(['m4_in_s'])
+   m4_popdef(['m4_out_p'])
+   m4_pushdef(['m4_out_s'])'])
+   
+
+
+
+//==================
+//
+// For Testing
+//
 
 \TLV simple_flow_macro_testbench()
    |pipe1
