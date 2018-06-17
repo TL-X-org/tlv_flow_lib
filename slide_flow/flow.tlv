@@ -44,12 +44,14 @@ m4_define(M4_PACKET_SIZE, 16)
 parameter PACKET_SIZE = M4_PACKET_SIZE;
 
 
+                                                                          
 \SV
    bit n_clk;
    assign n_clk = ! clk;
-\TLV
 
-   // testbench
+
+// Testbench
+\TLV
    /tb
       |count
          @1
@@ -105,8 +107,8 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
             $packets[M4_RING_STOP_CNT * PACKET_SIZE - 1 : 0] = /tb/ring_stop[*]|receive<>0$NumPackets;
             *passed = !$reset && ($packets == '0) && (/tb|count<>0$CycCount > 3);
    
-   
-   // DUT
+// DUT
+\TLV
    
    // Reset as a pipesignal.
    |default
@@ -129,16 +131,13 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
       //               (   top,     name,  first_cycle, last_cycle, trans)
       m4+stall_pipeline(/ring_stop, |stall,      0,          3, /trans)
       m4+flop_fifo_v2(/ring_stop, |stall3,     @1,     |bp0,    @1,        4,     /trans)
-      |bp0
-         @0
-            $reset = /top|default<>0$reset;
       m4+bp_pipeline(/ring_stop, |bp, 0, 3, /trans)
       |bp3
          @1
             $local = /trans$dest != #ring_stop;
       m4+opportunistic_flow(/ring_stop, |bp3, @1, |bypass, @1, $local, |ring_in, @1, /trans)
-   //            (  hop,    in_pipe, in_stage, out_pipe, out_stage, reset_scope,  reset_stage, reset_sig)
-   m4+simple_ring(/ring_stop, |ring_in,    @1,     |ring_out,     @1,     /top|default,      @1,       $reset, |rg, /trans)
+   //            (  hop,    in_pipe, in_stage, out_pipe, out_stage, reset, ring_pipe_name, trans)
+   m4+simple_ring(/ring_stop, |ring_in, @1, |ring_out, @1, /top|default<>0$reset, |rg, /trans)
    
    /ring_stop[*]
       m4+arb2(/ring_stop, |ring_out, @4, |bypass, @1, |arb_out, @1, /trans)
@@ -146,17 +145,15 @@ parameter PACKET_SIZE = M4_PACKET_SIZE;
       // Free-Flow Pipeline after Arb
 
       // FIFO2
-      //             ( top,  in_pipe, in_stage, out_pipe,  out_stage, depth, trans_hier)
       // TODO: should be |arb_out@5
-      |arb_out
-         @0
-            $reset = /top|default<>0$reset;
-      m4+flop_fifo_v2(/ring_stop, |arb_out,     @1,     |fifo2_out,    @1,        4,     /trans)        
+      m4+flop_fifo_v2(/ring_stop, |arb_out, @1, |fifo2_out, @1, 4, /trans)        
       |fifo2_out
          @0
             $blocked = 1'b0;
    
-   // Print
+   
+// Print
+\TLV
    /ring_stop[*]
       |stall0
          @1

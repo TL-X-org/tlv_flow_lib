@@ -48,6 +48,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // These three signals exist in the same pipestage, which we'll refer to here as |_pipe@_stage.
 //
+// Additionally, flow components propagate reset. By convention, components provide downstream a
+// |_out_pipe@_out_stage$reset. By default this reset is directly connected to |_in_pipe@_in_stage@reset
+// from the first of the inputs. An alternal reset signal can be provided (as a reference from |_in_pipe@_in_stage.
+//  This signal is used internally through a flop.
+//
 // So, more explicitly, the "ready/valid" interface typically supported by this flow library is:
 // 
 // From upstream:
@@ -56,6 +61,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //         $avail         // A transaction is available for consumption.
 //         ?$avail        // (though downstream should consume on ?$accepted)
 //            $ANY        // input transaction
+//         $reset         // The reset, unless an alternate is provided.
 // From downstream:
 //   |_pipe
 //      @_stage
@@ -91,6 +97,44 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //===============================
 //
+// Flow Component Helpers
+//
+
+// Common code for "avail/blocked"-protocol inputs.
+// Defines $accepted (for optional upstream use) and $reset_in (for optional internal use) for
+// each input. ($reset_in of the first input should be propagated to output).
+// Args:
+//   /_top: Top scope.
+//   _ins: List of inputs: |pipe, @stage, ...
+//   _outs: List of outputs: |pipe, @stage, ...
+//   $_reset1: (opt) The reference to use for the reset signal relative to the first input |pipe, @stage,
+//             if not $reset.
+\TLV flow_interface(/_top, _ins, _outs, $_reset1)
+   m4+flow_inputs(/_top, ['_ins'], $_reset1)
+   m4+flow_outputs(/_top, ['_outs'])
+
+// Helpers for the above macro.
+\TLV flow_inputs(/_top, _ins, $_reset)
+   m4_ifelse(['_ins'], [''], [''],
+   ['// Avail/Blocked Input:
+   m4_argn(1, _ins)
+      m4_argn(2, _ins)
+         $accepted = $avail && ! $blocked;  // provided for optional upstream use.
+         $reset_in = m4_ifelse($_reset, [''], ['$reset'], [' $_reset']);
+         `BOGUS_USE($accepted $reset_in)
+   m4+flow_inputs(/_top, m4_quote(m4_shift(m4_shift(_ins))), m4_quote(m4_shift(_resets)))
+   '])
+\TLV flow_outputs(/_top, _outs)
+   m4_ifelse(['_outs'], [''], [''],
+   ['// Avail/Blocked Output:
+   m4_argn(1, _outs)
+      m4_argn(2, _outs)
+         `BOGUS_USE($reset) // Output pipes must provide $reset.
+   m4+flow_outputs(/_top, m4_quote(m4_shift(m4_shift(_outs))))
+   '])
+
+//===============================
+//
 // Combinational Flow Components
 //
 
@@ -101,24 +145,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Inputs and output implement the "avail/blocked" protocol.
 // Input 1 has priority over input 2.
 // There is no storage.
-\TLV arb2(/_top, |_in1, @_in1, |_in2, @_in2, |_out, @_out, /_trans)
+\TLV arb2(/_top, |_in1, @_in1, |_in2, @_in2, |_out, @_out, /_trans, $_reset1)
+   m4+flow_interface(/_top, [' |_in1, @_in1, |_in2, @_in2'], [' |_out, @_out'], $_reset1)
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    // In1 is blocked if output is blocked.
    |_in1
       @_in1
          $blocked = /_top|_out>>m4_align(@_out, @_in1)$blocked;
-         $accepted = $avail && ! $blocked;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
    // In2 is blocked if output is blocked or in1 is available.
    |_in2
       @_in2
          $blocked = /_top|_out>>m4_align(@_out, @_in2)$blocked ||
                     /_top|_in1>>m4_align(@_in1, @_in2)$avail;
-         $accepted = $avail && ! $blocked;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
    // Output comes from in1 if available, otherwise, in2.
    |_out
       @_out
+         $reset = /_top|_in1>>m4_align(@_in1, @_out)$reset_in;
          // Output is available if either input is available.
          $avail = /_top|_in1>>m4_align(@_in1, @_out)$avail ||
                   /_top|_in2>>m4_align(@_in2, @_out)$avail;
@@ -126,18 +168,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             /_trans
          m4_trans_ind   $ANY = /_top|_in1>>m4_align(@_in1, @_out)$avail ? /_top|_in1/_trans>>m4_align(@_in1, @_out)$ANY :
                                                                           /_top|_in2/_trans>>m4_align(@_in2, @_out)$ANY;
+   m4_popdef(['m4_trans_ind'])
 
 // A 2-way-forked flow to an "opportunistic" path (could be a bypass) and a "safe" path. An available transaction
 // at the input will follow the opportunistic path if not blocked and the "ok" condition is true.
 // Otherwise, the transaction will be allowed to follow the "safe" path (if not blocked).
 // |_opp_out@_opp_out and |_safe_out@_safe_out are aligned with |_in@_in.
-\TLV opportunistic_flow(/_top, |_in, @_in, |_opp_out, @_opp_out, $_opp_ok, |_safe_out, @_safe_out, /_trans)
+\TLV opportunistic_flow(/_top, |_in, @_in, |_opp_out, @_opp_out, $_opp_ok, |_safe_out, @_safe_out, /_trans, $_reset)
+   m4+flow_interface(/_top, [' |_in, @_in'], [' |_opp_out, @_opp_out, |_safe_out, @_safe_out'], $_reset)
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    |_opp_out
       @_opp_out
          $avail = /_top|_in>>m4_align(@_in, @_opp_out)$avail &&
                   /_top|_in>>m4_align(@_in, @_opp_out)$_opp_ok;
-         //+$reset...
+         $reset = /_top|_in>>m4_align(@_in, @_opp_out)$reset_in;
          ?$avail
             /_trans
          m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_opp_out)$ANY;
@@ -146,7 +190,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          $avail = /_top|_in>>m4_align(@_in, @_safe_out)$avail &&
                   (! /_top|_in>>m4_align(@_in, @_safe_out)$_opp_ok ||
                    /_top|_opp_out>>m4_align(@_opp_out, @_safe_out)$blocked);
-         //+$reset = ...
+         $reset = /_top|_in>>m4_align(@_in, @_safe_out)$reset_in;
          ?$avail
             /_trans
          m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_safe_out)$ANY;
@@ -155,8 +199,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          $blocked = (/_top|_safe_out>>m4_align(@_opp_out, @_in)$blocked ||
                      ! $_opp_ok) &&
                     /_top|_opp_out>>m4_align(@_opp_out, @_in)$blocked;
-         $accepted = $avail && ! $blocked;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
    m4_popdef(['m4_trans_ind'])
 
 
@@ -165,16 +207,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // This is useful for phase-based logic which isn't fully ironed-out yet, and currently
 // requires clock enables to be driven a cycle before they the consuming clock edge.
 // This macro can be used to uncondition the input transaction to phase-based flow logic.
-\TLV uncondition_flow(/_top, |_in, @_in, |_out, @_out, /_trans)
+\TLV uncondition_flow(/_top, |_in, @_in, |_out, @_out, /_trans, $_reset)
+   m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    |_in
       @1
          $blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
-         $accepted = /_top|_out>>m4_align(@_out, @_in)$accepted;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
    |_out
       @1
          $avail = /_top|_in>>m4_align(@_in, @_out)$avail;
+         $reset = /_top|_in>>m4_align(@_in, @_out)$reset_in;
          /_trans
       m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_out)$ANY;
 
@@ -238,15 +280,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Internals:
 //   pre_latch_phase:             'L' for A-latch stage.
 //   post_latch_phase:            'L' for B-latch stage.
-\TLV bp_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, /_trans, #_b_latch, #_a_latch)
+\TLV bp_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, /_trans, #_b_latch, #_a_latch, $_reset)
    m4_pushdef(['m4_b_latch'],   m4_ifelse(#_b_latch, 1, 1, 0))
    m4_pushdef(['m4_a_latch'],   m4_ifelse(#_a_latch, 1, 1, 0))
    m4_pushdef(['m4_pre_latch_phase'],  m4_ifelse(m4_a_latch, 1, L,))
    m4_pushdef(['m4_post_latch_phase'], m4_ifelse(m4_b_latch, 1, L,))
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
+   m4+flow_interface(/_top, [' |_in_pipe, @_in_stage'], [' |_out_pipe, @_out_stage'], $_reset)
    |_out_pipe
       @m4_stage_eval(@_out_stage - m4_b_latch <<1)['']m4_post_latch_phase
-         $reset = /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage)$reset;
+         $reset = /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage <<1)$reset_in;
          
          $avail = $reset ? 1'b0 :
                            (>>1$avail && >>1$blocked) ||  // Recirc'ed or
@@ -267,8 +310,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       @m4_stage_eval(@_in_stage - m4_b_latch)['']m4_post_latch_phase
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;
          // This trans is blocked (whether valid or not) if the next stage is recirculating.
-         $accepted = $avail && ! $blocked;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
    m4_popdef(['m4_trans_ind'])
 
 
@@ -307,9 +348,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   |_name#_output_stage
 //      @1
 //         $avail         // A transaction is available for consumption.
-\TLV bp_pipeline(/_top, |_name, #_first_stage, #_last_stage, /_trans)
+\TLV bp_pipeline(/_top, |_name, #_first_stage, #_last_stage, /_trans, $_reset)
    m4_forloop(['m4_stage'], #_first_stage, #_last_stage, ['
-   m4+bp_stage(/_top, |_name['']m4_stage, @1, |_name['']m4_eval(m4_stage + 1), @1, /_trans)
+   m4+bp_stage(/_top, |_name['']m4_stage, @1, |_name['']m4_eval(m4_stage + 1), @1, /_trans, 0, 0, $_reset)
    '])
 
 
@@ -355,18 +396,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //            /_trans
 //               $ANY     // Output transaction
 //
-\TLV stall_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, /_trans)
+\TLV stall_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, /_trans, $_reset)
+   m4+flow_interface(/_top, [' |_in_pipe, @_in_stage'], [' |_out_pipe, @_out_stage'], $_reset)
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    |_in_pipe
       @_in_stage
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$blocked;
-         $accepted = $avail && ! $blocked;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
    |_out_pipe
       @_out_stage
          // Propagate $reset to next stage with no delay (may create timing pressure,
          //   but similar to reverse path for $blocked).
-         $reset = /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage)$reset;
+         $reset = /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage)$reset_in;
          
          $avail = $reset      ? 1'b0 :
                   >>1$blocked ? >>1$avail :
@@ -403,9 +443,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //            /trans
 //               $ANY
 //
-\TLV stall_pipeline(/_top, |_name, #_first_stage, #_last_stage, /_trans)
+\TLV stall_pipeline(/_top, |_name, #_first_stage, #_last_stage, /_trans, $_reset)
    m4_forloop(['m4_stage'], #_first_stage, #_last_stage, ['
-   m4+stall_stage(/_top, |_name['']m4_stage, @1, |_name['']m4_eval(m4_stage + 1), @1, /_trans)
+   m4+stall_stage(/_top, |_name['']m4_stage, @1, |_name['']m4_eval(m4_stage + 1), @1, /_trans, $_reset)
    '])
    //
 
@@ -468,7 +508,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
 m4_unsupported(['m4_flop_fifo'], 1)
-\TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans,#_high_water)
+\TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans,#_high_water, $_reset)
+   m4+flow_interface(/_top, [' |_in_pipe, @_in_at'], [' |_out_pipe, @_out_at'], $_reset)
    m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
    m4_pushdef(['m4_counter_width'], \$clog2((#_depth)+1))
    m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
@@ -488,8 +529,6 @@ m4_unsupported(['m4_flop_fifo'], 1)
          $out_blocked = /_top|_out_pipe>>m4_bypass_align$blocked;
          $blocked = >>1$full && $out_blocked;
          `BOGUS_USE($blocked)   // Not required to be consumed elsewhere.
-         $accepted = $avail && ! $blocked;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
          $would_bypass = >>1$empty;
          $bypass = $would_bypass && ! $out_blocked;
          $push = $accepted && ! $bypass;
@@ -574,6 +613,9 @@ m4_unsupported(['m4_flop_fifo'], 1)
          ?$trans_valid
             /_trans
          m4_trans_ind   $ANY = |_out_pipe/fifo_head['']/_trans$ANY;
+         
+         // Deliver reset.
+         $reset = /_top|_in_pipe>>m4_reverse_bypass_align$reset_in;
 
    m4_popdef(['m4_ptr_width'])
    m4_popdef(['m4_counter_width'])
@@ -664,13 +706,12 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //   /_top, |_in, @_in, |_out, @_out, #_depth, #_width: as one would expect.
 //   /_trans: hierarchy for transaction, eg: ['/flit'] or ['']
 //   #_high_water: Default to 0.  Number of additional entries beyond full.
-\TLV simple_bypass_fifo_v2(/_top, |_in, @_in, |_out, @_out, #_depth, #_width, /_trans, #_high_water)
+\TLV simple_bypass_fifo_v2(/_top, |_in, @_in, |_out, @_out, #_depth, #_width, /_trans, #_high_water, $_reset)
+   m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
    |_in
       @_in
          $out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
          $blocked = (/_top/fifo>>m4_align(0, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
-         $accepted = $avail && ! $blocked;
-         `BOGUS_USE($accepted)  // provided for optional upstream use.
    /fifo
       simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
          fifo(.clk(clk), .reset(/_top|_in>>m4_align(@_in, 0)$reset),
@@ -682,7 +723,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
    |_out
       @_out
          $avail = /_top/fifo>>m4_align(0, @_out)$cnt != 3'b0 || /_top|_in>>m4_align(@_in, @_out)$avail;
-         $trans_valid = $avail && !$blocked;
+         $reset = /_top|_in>>m4_align(@_in, @_out)$reset_in;
 
 
 
@@ -735,7 +776,8 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //
 
 m4_unsupported(['m4_vc_flop_fifo'], 1)
-\TLV vc_flop_fifo_v2(/_top, |_in_pipe, @_in_at, |_out_pipe, @_out_at, #_depth, /_trans, _vc_range, _prio_range, @_bypass_at_opt, #_high_water)
+\TLV vc_flop_fifo_v2(/_top, |_in_pipe, @_in_at, |_out_pipe, @_out_at, #_depth, /_trans, _vc_range, _prio_range, @_bypass_at_opt, #_high_water, $_reset)
+   // TODO: m4+flow_interface(/_top, [' |_in_pipe, @_in_at'], [' |_out_pipe, @_out_at'], $_reset)
    m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at_opt, [''], ['@_out_at'], ['@_bypass_at_opt']))
    m4_pushdef(['m4_arb_at'], m4_stage_eval(@_out_at - 1))  // Arb and read VC FIFOs the stage before m4_out_at.
    m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
@@ -905,7 +947,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   M4 constants must be defined as created by a call to m4_define_hier(..) corresponding to /_hop,
 //   and /_hop must have a low index of 0.
 //
-\TLV simple_ring(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, /_reset_scope, @_reset_at, $_reset_sig, |_name, /_trans)
+\TLV simple_ring(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, $_reset, |_name, /_trans)
    m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
@@ -913,6 +955,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
    m4_pushdef(['M4_HOP'], ['M4_']m4_translit(m4_hop_name, ['a-z'], ['A-Z']))
    // Logic
    /_hop[*]
+      m4+flow_interface(/_hop, [' |_in_pipe, @_in_at'], [' |_out_pipe, @_out_at'], $_reset)
       |default
          @0
             \SV_plus
@@ -920,12 +963,10 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
       |_in_pipe
          @_in_at
             $blocked = /_hop|_name<>0$passed_on;
-            $accepted = $avail && ! $blocked;
-            `BOGUS_USE($accepted)  // provided for optional upstream use.
       |_name
          @_in_at
             $passed_on = /_hop[prev_hop]|_name>>1$pass_on;
-            $valid = ! /_reset_scope>>m4_align(@_reset_at, @_in_at)$_reset_sig &&
+            $valid = ! /_hop|_in_pipe<>0$reset_in &&
                      ($passed_on || /_hop|_in_pipe<>0$avail);
             $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
             $dest[m4_echo(M4_HOP['_INDEX_RANGE'])] =
@@ -945,6 +986,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
             $avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
             //$blocked = 1'b0;
             $trans_valid = $avail; // && ! $blocked;
+            $reset = /_hop|_in_pipe>>m4_in_out_align$reset_in;
          ?$trans_valid
             @m4_stage_eval(@_out_at + 1)
                /_trans
@@ -1082,9 +1124,9 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //         ?trans_valid   // $avail && ! $blocked
 //            $ANY        // Output transaction
 
-\TLV self_cycle(/_top,|_in_pipe,@_in_stage,|_mid_pipe,@_mid_stage,|_out_pipe,@_out_stage,/_trans)
-   m4+bp_stage(/_top, |_in_pipe,  @_in_stage,           |_mid_pipe, @_mid_stage, /_trans, 1, 0)  // Not sure indentation is passed right.
-   m4+bp_stage(/_top, |_mid_pipe, m4_decr(@_mid_stage), |_out_pipe, @_out_stage, /_trans, 0, 1)
+\TLV self_cycle(/_top, |_in_pipe, @_in_stage, |_mid_pipe, @_mid_stage, |_out_pipe, @_out_stage, /_trans, $_reset)
+   m4+bp_stage(/_top, |_in_pipe,  @_in_stage,           |_mid_pipe, @_mid_stage, /_trans, 1, 0, $_reset)  // Not sure indentation is passed right.
+   m4+bp_stage(/_top, |_mid_pipe, m4_decr(@_mid_stage), |_out_pipe, @_out_stage, /_trans, 0, 1, $_reset)
 
 
 
@@ -1124,14 +1166,14 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   |m4_name['']m4_last_phase  (or |m4_out_pipe@(m4_out_stage-1))
 //      @1
 //         $avail         // A transaction is available for consumption.
-\TLV self_pipeline(/_top, |_name, |_in_pipe, @_in_stage, #_first_phase, #_last_phase, |_out_pipe, @_out_stage,/_trans)
+\TLV self_pipeline(/_top, |_name, |_in_pipe, @_in_stage, #_first_phase, #_last_phase, |_out_pipe, @_out_stage, /_trans, $_reset)
    m4_forloop(['m4_cycle'], 0, m4_eval((#_last_phase - #_first_phase) / 2), ['
-   m4_pushdef(['m4_phase'], m4_eval(']#_first_phase[' + (m4_cycle * 2)))
-   m4_pushdef(['m4_in_p'], m4_ifelse(m4_cycle, 0, ']|_in_pipe[',  ']|_name['['']m4_decr(m4_phase)))
-   m4_pushdef(['m4_in_s'], m4_ifelse(m4_cycle, 0, ']@_in_stage[', 1))
-   m4_pushdef(['m4_out_p'], m4_ifelse(m4_ifelse(']|_out_pipe[', , NO_MATCH, )m4_cycle, m4_eval((']#_last_phase - #_first_phase[') / 2), ']|_out_pipe[', ']|_name['['']m4_incr(m4_phase)))
-   m4_pushdef(['m4_out_s'], m4_ifelse(m4_ifelse(']@_out_stage[', , NO_MATCH, )m4_cycle, m4_eval((']#_last_phase - #_first_phase[') / 2), ']@_out_stage[', 1))
-   m4+self_cycle(']/_top[', m4_in_p, m4_in_s,']|_name['['']m4_phase, 1, m4_out_p, m4_out_s),/_trans)
+   m4_pushdef(['m4_phase'], m4_eval(#_first_phase + (m4_cycle * 2)))
+   m4_pushdef(['m4_in_p'], m4_ifelse(m4_cycle, 0, |_in_pipe,  |_name['']m4_decr(m4_phase)))
+   m4_pushdef(['m4_in_s'], m4_ifelse(m4_cycle, 0, @_in_stage, 1))
+   m4_pushdef(['m4_out_p'], m4_ifelse(m4_ifelse(|_out_pipe, , NO_MATCH, )m4_cycle, m4_eval((#_last_phase - #_first_phase) / 2), |_out_pipe, |_name['']m4_incr(m4_phase)))
+   m4_pushdef(['m4_out_s'], m4_ifelse(m4_ifelse(@_out_stage, , NO_MATCH, )m4_cycle, m4_eval((#_last_phase - #_first_phase) / 2), @_out_stage, 1))
+   m4+self_cycle(/_top, m4_in_p, m4_in_s, |_name['']m4_phase, @1, m4_out_p, m4_out_s, /_trans, $_reset)
    
    m4_popdef(['m4_phase'])
    m4_popdef(['m4_in_p'])
