@@ -1241,7 +1241,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   /_port: The name of the hierarchy for each port of the router.
 //   |_router_in, @_router_in: The router input.
 //   |_router_out, @_router_out: The router output.
-\TLV router_tb(/_top, /_port, |_router_in, @_router_in, |_router_out, @_router_out, /_trans, $_reset)
+\TLV router_testbench(/_top, /_port, |_router_in, @_router_in, |_router_out, @_router_out, /_trans, $_reset)
    /_port
       // Define flow interface. Note that router ins are tb outs and outs are ins.
       m4+flow_interface(/_port, [' |_router_out, @_router_out'], [' |_router_in, @_router_in'], $_reset)
