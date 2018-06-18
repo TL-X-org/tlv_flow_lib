@@ -1230,3 +1230,93 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                                              $RETAIN;
          
          $passed = $Cnt > 8 && ! $Error && $BackpressureApplied;
+
+
+// A router is a component that has a number of ports, each implementing the "avail/blocked" interface
+// The hierarchy for the ports must have been declared using m4_define_hier(M4_PORT_NAME, ...).
+// Transactions are routed to port $dest (which is a field of the transaction).
+// This macro creates a testbench under /tb that connects to /_top/_port/...
+// Params:
+//   /_top: The hierarchy level of the instantiation, containing the router ports and /tb.
+//   /_port: The name of the hierarchy for each port of the router.
+//   |_router_in, @_router_in: The router input.
+//   |_router_out, @_router_out: The router output.
+\TLV router_tb(/_top, /_port, |_router_in, @_router_in, |_router_out, @_router_out, /_trans, $_reset)
+   /_port
+      // Define flow interface. Note that router ins are tb outs and outs are ins.
+      m4+flow_interface(/_port, [' |_router_out, @_router_out'], [' |_router_in, @_router_in'], $_reset)
+   m4_pushdef(['m4_port'], ['m4_strip_prefix(/_port)'])
+   m4_pushdef(['M4_PORT'], ['m4_to_upper(m4_port)'])
+   m4_define(M4_PACKET_SIZE, 16)
+
+   /tb
+      |count
+         @1
+            $CycCount[15:0] <= /_top<>0$reset ? 16'b0 :
+                                                $CycCount + 1;
+            \SV_plus
+               always_ff @(posedge clk) begin
+                  \$display("Cycle: %0d", $CycCount);
+               end
+      /m4_hier_param(M4_PORT, HIER)
+         // STIMULUS
+         |send
+            @_router_in
+               // Generate a transaction to inject sometimes (if needed)
+               $valid_in = /tb|count<>0$CycCount == 3;
+               ?$valid_in
+                  /gen_trans
+                     $sender[m4_hier_param(M4_PORT, INDEX_RANGE)] = m4_port;
+                     //m4_rand($size, M4_PACKET_SIZE-1, 0, m4_port) // unused
+                     m4_rand($dest_tmp, m4_hier_param(M4_PORT, INDEX_MAX), 0, m4_port)
+                     $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $dest_tmp % m4_hier_param(M4_PORT, CNT);
+                     //$dest[M4_['']M4_PORT['']_INDEX_RANGE] = m4_port;
+                     //$packet_valid = m4_port == 0 ? 1'b1 : 1'b0; // valid for only first port - unused
+               $avail = $valid_in || /_port|receive<>0$request;
+               ?$avail
+                  /trans_out
+                     // Loopback requests as responses or use gen_trans.
+                     $ANY = /_port|receive>>m4_align(@_router_out, @_router_in)$request
+                                 ? /_port|receive/trans>>m4_align(@_router_out, @_router_in)$ANY :
+                                   |send/gen_trans$ANY;
+                     
+                     \SV_plus
+                        always_ff @(posedge clk) begin
+                           \$display("\|send[%0d]", m4_port);
+                           \$display("Sender: %0d, Destination: %0d", $sender, $dest);
+                        end
+         
+         |receive
+            @_router_out
+               $reset = /_top<>0$reset;
+               $accepted = /_top/_port|_router_out<>0$accepted;
+               $request = $accepted && /trans$sender != m4_port;
+               $received = $accepted && /trans$sender == m4_port;
+               $NumPackets[M4_PACKET_SIZE-1:0] <= $reset                  ? '0 :
+                                               /_port|send<>0$valid_in ? $NumPackets + 1 :
+                                               $request                ? $NumPackets :
+                                               $received               ? $NumPackets - 1 :
+                                                                         $NumPackets;
+               ?$accepted
+                  /trans
+                     $ANY = /_top/_port|_router_out/_trans<>0$ANY;
+                     $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = |receive$request ? $sender : $dest;
+      |pass
+         @1
+            $reset = /_top<>0$reset;
+            $packets[m4_hier_param(M4_PORT, CNT) * M4_PACKET_SIZE - 1 : 0] = /tb/_port[*]|receive<>0$NumPackets;
+            *passed = !$reset && ($packets == '0) && (/tb|count<>0$CycCount > 3);
+   /m4_hier_param(M4_PORT, HIER)
+      |_router_in
+         @_router_in
+            $avail = ! $reset && /_top/tb/_port|send<>0$avail;
+            ?$avail
+               /trans
+                  $ANY = /_top/tb/_port|send/trans_out<>0$ANY;
+      |_router_out
+         @_router_out
+            // Block requests that cannot loopback a response immediately.
+            $blocked = /_top/tb/_port|receive<>0$request && /_port|_router_in>>m4_align(@_router_in, @_router_out)$blocked;
+   m4_popdef(['m4_port'])
+   m4_popdef(['M4_PORT'])
+
