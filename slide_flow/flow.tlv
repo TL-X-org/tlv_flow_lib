@@ -32,7 +32,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 m4_include_url(['https:/']['/raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/fundamentals_lib.tlv'])
 m4_include_url(['https:/']['/raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
-
 m4_makerchip_module()
 
 m4_define_hier(M4_RING_STOP, 4, 0)
@@ -47,13 +46,10 @@ m4_define_hier(M4_RING_STOP, 4, 0)
    $reset = *reset;
    
    // Testbench
-   m4+router_tb(/top, /ring_stop, |stall0, @1, |fifo2_out, @1, /trans, /top<>0$reset)
+   m4+router_testbench(/top, /ring_stop, |stall0, @1, |fifo2_out, @1, /trans, /top<>0$reset)
    
    // Ring
    /M4_RING_STOP_HIER
-      |stall0
-         @0
-            $reset = /top<>0$reset;
       // The input transaction.
       //               (   top,     name,  first_cycle, last_cycle, trans)
       m4+stall_pipeline(/ring_stop, |stall,      0,          3, /trans)
@@ -75,65 +71,82 @@ m4_define_hier(M4_RING_STOP, 4, 0)
       // TODO: should be |arb_out@5
       m4+flop_fifo_v2(/ring_stop, |arb_out, @1, |fifo2_out, @1, 4, /trans)        
    
+   *passed = | /top/tb/ring_stop[*]|passed>>1$passed;
+   *failed = *cyc_cnt > 20;
    
 // Print
 \TLV
+   /*
    /ring_stop[*]
       |stall0
          @1
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|stall0[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|stall0$accepted) begin
+                        \$display("\|stall0[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
       |stall1
          @1
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|stall1[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|stall1$accepted) begin
+                        \$display("\|stall1[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
       |stall2
          @1
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|stall2[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|stall2$accepted) begin
+                        \$display("\|stall2[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
       |stall3
          @1
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|stall3[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|stall3$accepted) begin
+                        \$display("\|stall3[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
       |bp3
          @1
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|bp3[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|bp3$accepted) begin
+                        \$display("\|bp3[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
       |ring_in
          @1
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|ring_in[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|ring_in$accepted) begin
+                        \$display("\|ring_in[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
       |ring_out
-         @2
+         @4
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|ring_out[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|ring_out$accepted) begin
+                        \$display("\|ring_out[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
 
       |arb_out
@@ -141,17 +154,21 @@ m4_define_hier(M4_RING_STOP, 4, 0)
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|arb_out[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|arb_out$accepted) begin
+                        \$display("\|arb_out[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
       |fifo2_out
          @1
             /trans
                \SV_plus
                   always_ff @(posedge clk) begin
-                     \$display("\|fifo2_out[%0d]", ring_stop);
-                     \$display("Destination: %0d", $dest);
+                     if (|fifo2_out$accepted) begin
+                        \$display("\|fifo2_out[%0d]", ring_stop);
+                        \$display("Destination: %0d", $dest);
+                     end
                   end
-
+   */
 \SV
 endmodule 

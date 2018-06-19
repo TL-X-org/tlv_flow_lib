@@ -27,9 +27,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-   m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
+   m4_include_url(['https:/']['/raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
 
    m4_makerchip_module
+
 
 \TLV
    $reset = *reset;
@@ -42,11 +43,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    /bp_pipeline_test
       m4+simple_flow_macro_testbench()
       m4+bp_pipeline(/bp_pipeline_test, |pipe, 1, 3, /trans)
+   /ring_test
+      m4_define_hier(M4_PORT, 4, 0)
+      m4+router_testbench(/ring_test, /port, |in, @1, |out, @1, /trans, /top<>0$reset)
+      m4+simple_ring(/port, |in, @1, |out, @1, /top<>0$reset, |ring, /trans)
 
    *passed = *cyc_cnt > 100 &&
              (/top/stall_stage_test|pipe3>>1$passed ||
               /top/stall_pipeline_test|pipe3>>1$passed ||
               /top/bp_pipeline_test|pipe3>>1$passed ||
+              | /top/ring_test/tb/port[*]|passed>>1$passed ||
               1'b0);
    *failed = *cyc_cnt > 102;
    
