@@ -1,13 +1,25 @@
 ///////////Dsp_macros//////////////
 
 // MULT: Multiply Function implemented in a DSP48E
-\TLV mult($_p,$_a,$_b,$_ce,$_rst)
+\TLV mult($_p,$_a,$_b,$_rst,#_pipeline,$_ce,#_awidth,#_bwidth)
+   m4_define(
+   ['#_pipeline'],
+   ['m4_ifelse(['$1'], ['0'], ['$2'], ['$1'])'])
+   m4_define(
+   ['$_ce'],
+   ['m4_ifelse(['$1'], ['1'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_awidth'],
+   ['m4_ifelse(['$1'], ['30'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_bwidth'],
+   ['m4_ifelse(['$1'], ['18'], ['$2'], ['$1'])'])
    \SV_plus
       MULT_MACRO #(
          .DEVICE("ULTASCALE"), // Target Device: "ULTRASCALE" 
-         .LATENCY(0),        // Desired clock cycle latency, 0-4
-         .WIDTH_A(30),       // Multiplier A-input bus width, 1-30
-         .WIDTH_B(18)        // Multiplier B-input bus width, 1-18
+         .LATENCY(#_pipeline),        // Desired clock cycle latency, 0-4
+         .WIDTH_A(#_awidth),       // Multiplier A-input bus width, 1-30
+         .WIDTH_B(#_bwidth),       // Multiplier B-input bus width, 1-18
       ) MULT_MACRO_inst (
          .P($['']$_p),     // MACC output bus, width determined by WIDTH_P parameter 
          .A($_a),     // MACC input A bus, width determined by WIDTH_A parameter 
@@ -19,14 +31,29 @@
    
 
 // MACC: Multiply Accumulate Function implemented in a DSP48E
-\TLV macc($_p,$_a,$_addsub,$_b,$_carryin,$_ce,$_load,$_loaddata,$_rst)
+\TLV macc($_p,$_a,$_addsub,$_b,$_carryin,$_load,$_loaddata,$_rst,#_pipeline,$_ce,#_awidth,#_bwidth,#_pwidth`)
+   m4_define(
+   ['#_pipeline'],
+   ['m4_ifelse(['$1'], ['0'], ['$2'], ['$1'])'])
+   m4_define(
+   ['$_ce'],
+   ['m4_ifelse(['$1'], ['1'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_awidth'],
+   ['m4_ifelse(['$1'], ['30'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_bwidth'],
+   ['m4_ifelse(['$1'], ['18'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_pwidth'],
+   ['m4_ifelse(['$1'], ['48'], ['$2'], ['$1'])'])
    \SV_plus
       MACC_MACRO #(
           .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
-          .LATENCY(0),        // Desired clock cycle latency, 1-4
-          .WIDTH_A(30),       // Multiplier A-input bus width, 1-30
-          .WIDTH_B(18),       // Multiplier B-input bus width, 1-18
-          .WIDTH_P(48)        // Accumulator output bus width, 1-48
+          .LATENCY(#_pipeline),        // Desired clock cycle latency, 1-4
+          .WIDTH_A(#_awidth),       // Multiplier A-input bus width, 1-30
+          .WIDTH_B(#_bwidth),       // Multiplier B-input bus width, 1-18
+          .WIDTH_P(#_pwidth)        // Accumulator output bus width, 1-48
        ) MACC_MACRO_inst (
           .P($['']$_p),     // MACC output bus, width determined by WIDTH_P parameter 
           .A($_a),     // MACC input A bus, width determined by WIDTH_A parameter 
@@ -41,12 +68,18 @@
        );
    
 // COUNTER_LOAD: Loadable variable counter implemented in a DSP48E
-\TLV counter_load($_q,$_ce,$_direction,$_load,$_loaddata,$_rst)
+\TLV counter_load($_q,$_direction,$_load,$_loaddata,$_rst,$_ce,#_width_data)
+   m4_define(
+   ['$_ce'],
+   ['m4_ifelse(['$1'], ['1'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_width_data'],
+   ['m4_ifelse(['$1'], ['48'], ['$2'], ['$1'])'])
    \SV_plus
       COUNTER_LOAD_MACRO #(
          .COUNT_BY(48'h000000000001), // Count by value
          .DEVICE("ULTRASCALE"), // Target Device: "ULTRSCALE" 
-         .WIDTH_DATA(48)     // Counter output bus width, 1-48
+         .WIDTH_DATA(#_width_data)     // Counter output bus width, 1-48
       ) COUNTER_LOAD_MACRO_inst (
          .Q($['']$_q),                 // Counter output, width determined by WIDTH_DATA parameter 
          .CLK(*clk),             // 1-bit clock input
@@ -57,18 +90,27 @@
          .RST($_rst)              // 1-bit active high synchronous reset
       );
 // EQ_COMPARE_MACRO: Equality Comparator implemented in a DSP48E  
-\TLV  eq_compare($_q,$_ce,$_datain,$_dynamicpattern,$_rst) 
+\TLV  eq_compare($_q,$_datain,$_dynamicpattern,$_rst,#_pipeline,$_ce,#_width) 
+   m4_define(
+   ['#_pipeline'],
+   ['m4_ifelse(['$1'], ['0'], ['$2'], ['$1'])'])
+   m4_define(
+   ['$_ce'],
+   ['m4_ifelse(['$1'], ['1'], ['$2'], ['$1'])'])
+      m4_define(
+   ['#_width'],
+   ['m4_ifelse(['$1'], ['48'], ['$2'], ['$1'])'])
    \SV_plus
       EQ_COMPARE_MACRO #(
          .DEVICE("ULTRASCALE"),       // Target Device: "ULTRASCALE" 
-         .LATENCY(0),              // Desired clock cycle latency, 0-2
+         .LATENCY(#_pipeline),              // Desired clock cycle latency, 0-2
          .MASK(48'h000000000000),  // Select bits to be masked, must set SEL_MASK="MASK" 
          .SEL_MASK("MASK"),        // "MASK" = use MASK parameter,
                                    //   "DYNAMIC_PATTERN" = use DYNAMIC_PATTERN input bus
          .SEL_PATTERN("STATIC_PATTERN"), // "STATIC_PATTERN" = use STATIC_PATTERN parameter,
                                          //   "DYNAMIC_PATTERN = use DYNAMIC_PATTERN input bus
          .STATIC_PATTERN(48'h000000000000), // Specify static pattern, must set SEL_PATTERN = "STATIC_PATTERN" 
-         .WIDTH(48)                // Comparator output bus width, 1-48
+         .WIDTH(#_width)                // Comparator output bus width, 1-48
       ) EQ_COMPARE_MACRO_inst (
          .Q($['']$_q),     // 1-bit output indicating a match
          .CE($_ce),   // 1-bit active high input clock enable
@@ -78,7 +120,10 @@
          .RST($_rst)  // 1-bit input active high reset
       );
 // COUNTER_TC_MACRO: Counter with terminal count implemented in a DSP48E
-\TLV  counter_tc($_q,$_tc,$_ce,$_rst)
+\TLV  counter_tc($_q,$_tc,$_rst,$_ce)
+   m4_define(
+   ['$_ce'],
+   ['m4_ifelse(['$1'], ['1'], ['$2'], ['$1'])'])
    \SV_plus
       COUNTER_TC_MACRO #(
           .COUNT_BY(48'h000000000001), // Count by value
@@ -96,11 +141,17 @@
        );
    
 // ADDSUB_MACRO: Variable width & latency - Adder / Subtracter implemented in a DSP48E
-\TLV addsub($_carryout,$result,$_a,$_addsub,$_b,$_carryin,$_ce,$_rst)
+\TLV addsub($_carryout,$result,$_a,$_addsub,$_b,$_carryin,$_rst,#_pipeline,$_ce)
+   m4_define(
+   ['#_pipeline'],
+   ['m4_ifelse(['$1'], ['0'], ['$2'], ['$1'])'])
+   m4_define(
+   ['$_ce'],
+   ['m4_ifelse(['$1'], ['1'], ['$2'], ['$1'])'])
    \SV_plus
       ADDSUB_MACRO #(
          .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
-         .LATENCY(0),        // Desired clock cycle latency, 0-2
+         .LATENCY(#_pipeline),        // Desired clock cycle latency, 0-2
          .WIDTH(48)          // Input / output bus width, 1-48
       ) ADDSUB_MACRO_inst (
          .CARRYOUT($['']$carryout), // 1-bit carry-out output signal
@@ -114,14 +165,31 @@
          .RST( $_rst)ADDMACC            // 1-bit active high synchronous reset
       );
 // ADDMACC_MACRO: Variable width & latency - Pre-Add -> Multiplier -> Accumulate
-\TLV addmacc ($_product,$_carryin,$_ce,$_direction,$_load,$_loaddata,$_multiplier,$_preadd2,$_preadd1,$_rst)
+\TLV addmacc ($_product,$_carryin,$_direction,$_load,$_loaddata,$_multiplier,$_preadd2,$_preadd1,$_rst,#_pipeline,$_ce,#_width_preadd,#_width_multiplier,#_width_product)
+   m4_define(
+   ['#_pipeline'],
+   ['m4_ifelse(['$1'], ['0'], ['$2'], ['$1'])'])
+   m4_define(
+   ['$_ce'],
+   ['m4_ifelse(['$1'], ['1'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_width_preadd'],
+   ['m4_ifelse(['$1'], ['30'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_width_multiplier'],
+   ['m4_ifelse(['$1'], ['18'], ['$2'], ['$1'])'])
+   m4_define(
+   ['#_width_product'],
+   ['m4_ifelse(['$1'], ['48'], ['$2'], ['$1'])'])
+   
+   
    \SV_plus
       ADDMACC_MACRO #(
          .DEVICE("ULTRASCALE"),    // Target Device: "ULTRASCALE" 
-         .LATENCY(0),           // Desired clock cycle latency, 0-4
-         .WIDTH_PREADD(30),     // Pre-adder input width, 1-30
-         .WIDTH_MULTIPLIER(18), // Multiplier input width, 1-18
-         .WIDTH_PRODUCT(48)     // MACC output width, 1-48
+         .LATENCY(#_pipeline),           // Desired clock cycle latency, 0-4
+         .WIDTH_PREADD(#_width_preadd),     // Pre-adder input width, 1-30
+         .WIDTH_MULTIPLIER(#_width_multiplier), // Multiplier input width, 1-18
+         .WIDTH_PRODUCT(#_width_product)     // MACC output width, 1-48
       ) ADDMACC_MACRO_inst (
          .PRODUCT($['']$_product),   // MACC result output, width defined by WIDTH_PRODUCT parameter
          .CARRYIN($_carryin),   // 1-bit carry-in input
@@ -135,11 +203,14 @@
          .RST($_rst)            // 1-bit active high synchronous reset
       );
 //////////RAM_macros//////////////
-\TLV ram128b($_d,$_we,$_a,$_dpra,$_dp0,$_sp0)
+\TLV ram128b($_d,$_we,$_a,$_dpra,$_dp0,$_sp0,#_wclk_inverted)
+   m4_define(
+   ['#_wclk_inverted'],
+   ['m4_ifelse(['$1'], ['0'], ['$2'], ['$1'])'])
    \SV_plus
       RAM128X1D #(
       .INIT(128’h0),
-      .IS_WCLK_INVERTED(1’b0) // Specifies active high/low WCLK
+      .IS_WCLK_INVERTED(1’b#_wclk_inverted) // Specifies active high/low WCLK
       ) RAM128X1D_inst (
       .DPO($['']$_dp0), // Read port 1-bit output
       .SPO($['']$_sp0), // Read/write port 1-bit output
