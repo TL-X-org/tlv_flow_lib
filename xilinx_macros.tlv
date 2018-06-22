@@ -2,12 +2,10 @@
 
 // MULT: Multiply Function implemented in a DSP48E
 \TLV mult($_p,$_a,$_b,$_rst,#_pipeline,$_ce,#_awidth,#_bwidth)
-   
    m4_pushdef(['m4_pipeline'], ['m4_defaulted_arg(['#_pipeline'], ['0'])'])
    m4_pushdef(['m4_awidth'], ['m4_defaulted_arg(['#_awidth'], ['30'])'])
    m4_pushdef(['m4_bwidth'], ['m4_defaulted_arg(['#_bwidth'], ['18'])'])
    m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-
    \SV_plus
       MULT_MACRO #(
          .DEVICE("ULTASCALE"), // Target Device: "ULTRASCALE" 
@@ -34,7 +32,7 @@
    m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
    m4_pushdef(['m4_awidth'], ['m4_defaulted_arg(['#_awidth'], ['30'])'])
    m4_pushdef(['m4_bwidth'], ['m4_defaulted_arg(['#_bwidth'], ['18'])'])
-   m4_pushdef(['m4_pwidth'], ['m4_defaulted_arg(['#_pwidth'], ['48'])'])
+   m4_define(['m4_pwidth'], ['m4_defaulted_arg(['#_pwidth'], ['48'])'])
    \SV_plus
       MACC_MACRO #(
           .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
@@ -58,7 +56,6 @@
    m4_popdef(['m4_ce'])
    m4_popdef(['m4_awidth'])
    m4_popdef(['m4_bwidth'])
-   m4_popdef(['m4_pwidth'])
 // COUNTER_LOAD: Loadable variable counter implemented in a DSP48E
 \TLV counter_load($_q,$_direction,$_load,$_loaddata,$_rst,$_ce,#_width_data)
    m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
@@ -158,9 +155,9 @@
 \TLV addmacc ($_product,$_carryin,$_direction,$_load,$_loaddata,$_multiplier,$_preadd2,$_preadd1,$_rst,#_pipeline,$_ce,#_width_preadd,#_width_multiplier,#_width_product)
    m4_pushdef(['m4_pipeline'], ['m4_defaulted_arg(['#_pipeline'], ['0'])'])
    m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-   m4_pushdef(['m4_width_preadd'], ['m4_defaulted_arg(['#_width_preadd'], ['30'])'])
-   m4_pushdef(['m4_width_multiplier'], ['m4_defaulted_arg(['#_width_multiplier'], ['18'])'])
-   m4_pushdef(['m4_width_product'], ['m4_defaulted_arg(['#_width_product'], ['48'])'])
+   m4_define(['m4_width_preadd'], ['m4_defaulted_arg(['#_width_preadd'], ['30'])'])
+   m4_define(['m4_width_multiplier'], ['m4_defaulted_arg(['#_width_multiplier'], ['18'])'])
+   m4_define(['m4_width_product'], ['m4_defaulted_arg(['#_width_product'], ['48'])'])
 
    \SV_plus
       ADDMACC_MACRO #(
@@ -183,12 +180,9 @@
       );
    m4_popdef(['m4_pipeline'])
    m4_popdef(['m4_ce'])
-   m4_popdef(['m4_width_preadd'])
-   m4_popdef(['m4_width_multiplier'])
-   m4_popdef(['m4_width_product'])
 //////////RAM_macros//////////////
 \TLV ram128b($_d,$_we,$_a,$_dpra,$_dp0,$_sp0,#_wclk_inverted)
-   m4_pushdef(['m4_wclk_inverted'], ['m4_defaulted_arg(['#_wclk_inverted'], ['0'])'])
+   m4_define(['m4_wclk_inverted'], ['m4_defaulted_arg(['#_wclk_inverted'], ['0'])'])
 
    \SV_plus
       RAM128X1D #(
@@ -203,7 +197,6 @@
       .WCLK(*clk), // Write clock input
       .WE($_we) // Write enable input
       );
-  m4_popdef(['m4_wclk_inverted'])
 
 // FIFO_DUALCLOCK_MACRO: Dual Clock First-In, First-Out (FIFO) RAM Buffer
 \TLV fifo_dualclock($_almostempty,$_almostfull,$_do,$_empty,$_full,$_rdcount,$_rderr,$_wrcount,$_wrerr,$_di,$_rdclk,$_rden,$_rst,$_wrclk,$_wren)
