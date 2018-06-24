@@ -2,113 +2,83 @@
 
 // MULT: Multiply Function implemented in a DSP48E
 \TLV mult($_p,$_a,$_b,$_rst,#_pipeline,$_ce,#_awidth,#_bwidth)
-   m4_pushdef(['m4_pipeline'], ['m4_defaulted_arg(['#_pipeline'], ['0'])'])
-   m4_pushdef(['m4_awidth'], ['m4_defaulted_arg(['#_awidth'], ['30'])'])
-   m4_pushdef(['m4_bwidth'], ['m4_defaulted_arg(['#_bwidth'], ['18'])'])
-   m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
    \SV_plus
       MULT_MACRO #(
          .DEVICE("ULTASCALE"), // Target Device: "ULTRASCALE" 
-         .LATENCY(m4_pipeline),        // Desired clock cycle latency, 0-4
-         .WIDTH_A(m4_awidth),       // Multiplier A-input bus width, 1-30
-         .WIDTH_B(m4_awidth),       // Multiplier B-input bus width, 1-18
+         .LATENCY(m4_defaulted_arg(['#_pipeline'], ['0'])),        // Desired clock cycle latency, 0-4
+         .WIDTH_A(m4_defaulted_arg(['#_awidth'], ['30'])),       // Multiplier A-input bus width, 1-30
+         .WIDTH_B(m4_defaulted_arg(['#_bwidth'], ['18'])),       // Multiplier B-input bus width, 1-18
       ) MULT_MACRO_inst (
          .P($['']$_p),     // MACC output bus, width determined by WIDTH_P parameter 
          .A($_a),     // MACC input A bus, width determined by WIDTH_A parameter 
          .B($_b),     // MACC input B bus, width determined by WIDTH_B parameter 
-         .CE(m4_ce),     // 1-bit active high input clock enable
+         .CE(m4_defaulted_arg(['$_ce'], ['1'])),     // 1-bit active high input clock enable
          .CLK(*clk),   // 1-bit positive edge clock input       \
          .RST($_rst)    // 1-bit input active high reset
       );
-   m4_popdef(['m4_pipeline'])
-   m4_popdef(['m4_awidth'])
-   m4_popdef(['m4_bwidth'])
-   m4_popdef(['m4_ce'])
-   
 
 // MACC: Multiply Accumulate Function implemented in a DSP48E
 \TLV macc($_p,$_a,$_addsub,$_b,$_carryin,$_load,$_loaddata,$_rst,#_pipeline,$_ce,#_awidth,#_bwidth,#_pwidth`)
-   m4_pushdef(['m4_pipeline'], ['m4_defaulted_arg(['#_pipeline'], ['0'])'])
-   m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-   m4_pushdef(['m4_awidth'], ['m4_defaulted_arg(['#_awidth'], ['30'])'])
-   m4_pushdef(['m4_bwidth'], ['m4_defaulted_arg(['#_bwidth'], ['18'])'])
-   m4_define(['m4_pwidth'], ['m4_defaulted_arg(['#_pwidth'], ['48'])'])
    \SV_plus
       MACC_MACRO #(
           .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
-          .LATENCY(m4_pipeline),        // Desired clock cycle latency, 1-4
-          .WIDTH_A(m4_awidth),       // Multiplier A-input bus width, 1-30
-          .WIDTH_B(m4_bwidth),       // Multiplier B-input bus width, 1-18
-          .WIDTH_P(m4_pwidth)        // Accumulator output bus width, 1-48
+          .LATENCY(m4_defaulted_arg(['#_pipeline'], ['0'])),        // Desired clock cycle latency, 1-4
+          .WIDTH_A(m4_defaulted_arg(['#_awidth'], ['30'])),       // Multiplier A-input bus width, 1-30
+          .WIDTH_B(m4_defaulted_arg(['#_bwidth'], ['18'])),       // Multiplier B-input bus width, 1-18
+          .WIDTH_P(m4_defaulted_arg(['#_pwidth'], ['48']))        // Accumulator output bus width, 1-48
        ) MACC_MACRO_inst (
           .P($['']$_p),     // MACC output bus, width determined by WIDTH_P parameter 
           .A($_a),     // MACC input A bus, width determined by WIDTH_A parameter 
           .ADDSUB($_addsub), // 1-bit add/sub input, high selects add, low selects subtract
           .B($_b),     // MACC input B bus, width determined by WIDTH_B parameter 
           .CARRYIN($_carryin), // 1-bit carry-in input to accumulator
-          .CE(m4_ce),     // 1-bit active high input clock enable
+          .CE(m4_defaulted_arg(['$_ce'], ['1'])),     // 1-bit active high input clock enable
           .CLK(*clk),   // 1-bit positive edge clock input
           .LOAD($_load), // 1-bit active high input load accumulator enable
           .LOAD_DATA($_loaddata), // Load accumulator input data, width determined by WIDTH_P parameter
           .RST($_rst)    // 1-bit input active high reset
        );
-   m4_popdef(['m4_pipeline'])
-   m4_popdef(['m4_ce'])
-   m4_popdef(['m4_awidth'])
-   m4_popdef(['m4_bwidth'])
 // COUNTER_LOAD: Loadable variable counter implemented in a DSP48E
 \TLV counter_load($_q,$_direction,$_load,$_loaddata,$_rst,$_ce,#_width_data)
-   m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-   m4_pushdef(['m4_width_data'], ['m4_defaulted_arg(['#_width_data'], ['48'])'])
-
    \SV_plus
       COUNTER_LOAD_MACRO #(
          .COUNT_BY(48'h000000000001), // Count by value
          .DEVICE("ULTRASCALE"), // Target Device: "ULTRSCALE" 
-         .WIDTH_DATA(m4_width_data)     // Counter output bus width, 1-48
+         .WIDTH_DATA(m4_defaulted_arg(['#_width_data'], ['48']))     // Counter output bus width, 1-48
       ) COUNTER_LOAD_MACRO_inst (
          .Q($['']$_q),                 // Counter output, width determined by WIDTH_DATA parameter 
          .CLK(*clk),             // 1-bit clock input
-         .CE(m4_ce),               // 1-bit clock enable input
+         .CE(m4_defaulted_arg(['$_ce'], ['1'])),               // 1-bit clock enable input
          .DIRECTION($_direction), // 1-bit up/down count direction input, high is count up
          .LOAD($_load),           // 1-bit active high load input
          .LOAD_DATA($_loaddata), // Counter load data, width determined by WIDTH_DATA parameter 
          .RST($_rst)              // 1-bit active high synchronous reset
       );
-   m4_popdef(['m4_ce'])
-   m4_popdef(['m4_width_data'])
+
 // EQ_COMPARE_MACRO: Equality Comparator implemented in a DSP48E  
 \TLV  eq_compare($_q,$_datain,$_dynamicpattern,$_rst,#_pipeline,$_ce,#_width) 
-   m4_pushdef(['m4_pipeline'], ['m4_defaulted_arg(['#_pipeline'], ['0'])'])
-   m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-   m4_pushdef(['m4_width'], ['m4_defaulted_arg(['#_width'], ['48'])'])
    \SV_plus
       EQ_COMPARE_MACRO #(
          .DEVICE("ULTRASCALE"),       // Target Device: "ULTRASCALE" 
-         .LATENCY(m4_pipeline),              // Desired clock cycle latency, 0-2
+         .LATENCY(m4_defaulted_arg(['#_pipeline'], ['0'])),              // Desired clock cycle latency, 0-2
          .MASK(48'h000000000000),  // Select bits to be masked, must set SEL_MASK="MASK" 
          .SEL_MASK("MASK"),        // "MASK" = use MASK parameter,
                                    //   "DYNAMIC_PATTERN" = use DYNAMIC_PATTERN input bus
          .SEL_PATTERN("STATIC_PATTERN"), // "STATIC_PATTERN" = use STATIC_PATTERN parameter,
                                          //   "DYNAMIC_PATTERN = use DYNAMIC_PATTERN input bus
          .STATIC_PATTERN(48'h000000000000), // Specify static pattern, must set SEL_PATTERN = "STATIC_PATTERN" 
-         .WIDTH(m4_width)                // Comparator output bus width, 1-48
+         .WIDTH(m4_defaulted_arg(['#_width'], ['48']))                // Comparator output bus width, 1-48
       ) EQ_COMPARE_MACRO_inst (
          .Q($['']$_q),     // 1-bit output indicating a match
-         .CE(m4_ce),   // 1-bit active high input clock enable
+         .CE(m4_defaulted_arg(['$_ce'], ['1'])),   // 1-bit active high input clock enable
          .CLK(*clk), // 1-bit positive edge clock input
          .DATA_IN($_datain), // Input Data Bus, width determined by WIDTH parameter 
          .DYNAMIC_PATTERN($_dynamicpattern), // Input Dynamic Match/Mask Bus, width determined by WIDTH parameter 
          .RST($_rst)  // 1-bit input active high reset
       );
-   m4_popdef(['m4_pipeline'])
-   m4_popdef(['m4_ce'])
-   m4_popdef(['m4_width'])
+
 // COUNTER_TC_MACRO: Counter with terminal count implemented in a DSP48E
 \TLV  counter_tc($_q,$_tc,$_rst,#_pipeline,$_ce,#_width_data)
-   m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-   m4_pushdef(['m4_width_data'], ['m4_defaulted_arg(['#_width_data'], ['48'])'])
-   
    \SV_plus
       COUNTER_TC_MACRO #(
           .COUNT_BY(48'h000000000001), // Count by value
@@ -116,27 +86,22 @@
           .DIRECTION("UP"),            // Counter direction, "UP" or "DOWN" 
           .RESET_UPON_TC("FALSE"), // Reset counter upon terminal count, "TRUE" or "FALSE" 
           .TC_VALUE(48'h000000000000), // Terminal count value
-          .WIDTH_DATA(m4_width_data)              // Counter output bus width, 1-48
+          .WIDTH_DATA(m4_defaulted_arg(['#_width_data'], ['48']))              // Counter output bus width, 1-48
        ) COUNTER_TC_MACRO_inst (
           .Q($['']$_q),     // Counter output bus, width determined by WIDTH_DATA parameter 
           .TC($['']$_tc),   // 1-bit terminal count output, high = terminal count is reached
           .CLK(*clk), // 1-bit positive edge clock input
-          .CE(m4_ce),   // 1-bit active high clock enable input
+          .CE(m4_defaulted_arg(['$_ce'], ['1'])),   // 1-bit active high clock enable input
           .RST($_rst)  // 1-bit active high synchronous reset
        );
-   m4_popdef(['m4_ce'])
-   m4_popdef(['m4_width_data'])   
+
 // ADDSUB_MACRO: Variable width & latency - Adder / Subtracter implemented in a DSP48E
 \TLV addsub($_carryout,$result,$_a,$_addsub,$_b,$_carryin,$_rst,#_pipeline,$_ce,#_width)
-   m4_pushdef(['m4_pipeline'], ['m4_defaulted_arg(['#_pipeline'], ['0'])'])
-   m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-   m4_pushdef(['m4_width'], ['m4_defaulted_arg(['#_width'], ['48'])'])
-
    \SV_plus
       ADDSUB_MACRO #(
          .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
-         .LATENCY(m4_pipeline),        // Desired clock cycle latency, 0-2
-         .WIDTH(m4_width)          // Input / output bus width, 1-48
+         .LATENCY(m4_defaulted_arg(['#_pipeline'], ['0'])),        // Desired clock cycle latency, 0-2
+         .WIDTH(m4_defaulted_arg(['#_width'], ['48']))          // Input / output bus width, 1-48
       ) ADDSUB_MACRO_inst (
          .CARRYOUT($['']$carryout), // 1-bit carry-out output signal
          .RESULT($['']$result),     // Add/sub result output, width defined by WIDTH parameter
@@ -144,33 +109,24 @@
          .ADD_SUB($_addsub),   // 1-bit add/sub input, high selects add, low selects subtract
          .B($_b),               // Input B bus, width defined by WIDTH parameter
          .CARRYIN($_carryin),   // 1-bit carry-in input
-         .CE(m4_ce),             // 1-bit clock enable input
+         .CE(m4_defaulted_arg(['$_ce'], ['1'])),             // 1-bit clock enable input
          .CLK(*clk),           // 1-bit clock input
          .RST( $_rst)ADDMACC            // 1-bit active high synchronous reset
       );
-   m4_popdef(['m4_pipeline'])
-   m4_popdef(['m4_ce'])
-   m4_popdef(['m4_width'])
 // ADDMACC_MACRO: Variable width & latency - Pre-Add -> Multiplier -> Accumulate
 \TLV addmacc ($_product,$_carryin,$_direction,$_load,$_loaddata,$_multiplier,$_preadd2,$_preadd1,$_rst,#_pipeline,$_ce,#_width_preadd,#_width_multiplier,#_width_product)
-   m4_pushdef(['m4_pipeline'], ['m4_defaulted_arg(['#_pipeline'], ['0'])'])
-   m4_pushdef(['m4_ce'], ['m4_defaulted_arg(['$_ce'], ['1'])'])
-   m4_define(['m4_width_preadd'], ['m4_defaulted_arg(['#_width_preadd'], ['30'])'])
-   m4_define(['m4_width_multiplier'], ['m4_defaulted_arg(['#_width_multiplier'], ['18'])'])
-   m4_define(['m4_width_product'], ['m4_defaulted_arg(['#_width_product'], ['48'])'])
-
    \SV_plus
       ADDMACC_MACRO #(
          .DEVICE("ULTRASCALE"),    // Target Device: "ULTRASCALE" 
-         .LATENCY(m4_pipeline),           // Desired clock cycle latency, 0-4
-         .WIDTH_PREADD(m4_width_preadd),     // Pre-adder input width, 1-30
-         .WIDTH_MULTIPLIER(m4_width_multiplier), // Multiplier input width, 1-18
-         .WIDTH_PRODUCT(m4_width_product)     // MACC output width, 1-48
+         .LATENCY(m4_defaulted_arg(['#_pipeline'], ['0'])),           // Desired clock cycle latency, 0-4
+         .WIDTH_PREADD(m4_defaulted_arg(['#_width_preadd'], ['30'])),     // Pre-adder input width, 1-30
+         .WIDTH_MULTIPLIER(m4_defaulted_arg(['#_width_multiplier'], ['18'])), // Multiplier input width, 1-18
+         .WIDTH_PRODUCT(m4_defaulted_arg(['#_width_product'], ['48']))     // MACC output width, 1-48
       ) ADDMACC_MACRO_inst (
          .PRODUCT($['']$_product),   // MACC result output, width defined by WIDTH_PRODUCT parameter
          .CARRYIN($_carryin),   // 1-bit carry-in input
          .CLK(*clk),           // 1-bit clock input
-         .CE(m4_ce),             // 1-bit clock enable input
+         .CE(m4_defaulted_arg(['$_ce'], ['1'])),             // 1-bit clock enable input
          .LOAD($_load),         // 1-bit accumulator load input
          .LOAD_DATA($_loaddata),   // Accumulator load data input, width defined by WIDTH_PRODUCT parameter
          .MULTIPLIER($_multiplier), // Multiplier data input, width defined by WIDTH_MULTIPLIER parameter
@@ -178,16 +134,12 @@
          .PREADD1($_preadd1),   // Preadder data input, width defined by WIDTH_PREADD parameter
          .RST($_rst)            // 1-bit active high synchronous reset
       );
-   m4_popdef(['m4_pipeline'])
-   m4_popdef(['m4_ce'])
 //////////RAM_macros//////////////
 \TLV ram128b($_d,$_we,$_a,$_dpra,$_dp0,$_sp0,#_wclk_inverted)
-   m4_define(['m4_wclk_inverted'], ['m4_defaulted_arg(['#_wclk_inverted'], ['0'])'])
-
    \SV_plus
       RAM128X1D #(
       .INIT(128’h0),
-      .IS_WCLK_INVERTED(1’b['']m4_wclk_inverted) // Specifies active high/low WCLK
+      .IS_WCLK_INVERTED(1’b['']m4_defaulted_arg(['#_wclk_inverted'], ['0'])) // Specifies active high/low WCLK
       ) RAM128X1D_inst (
       .DPO($['']$_dp0), // Read port 1-bit output
       .SPO($['']$_sp0), // Read/write port 1-bit output
