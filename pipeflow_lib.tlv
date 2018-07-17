@@ -710,20 +710,22 @@ m4_unsupported(['m4_flop_fifo'], 1)
 \TLV simple_bypass_fifo_v2(/_top, |_in, @_in, |_out, @_out, #_depth, #_width, /_trans, #_high_water, $_reset)
    m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
    |_in
+      /_trans
       @_in
          $out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
-         $blocked = (/_top/fifo>>m4_align(0, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
-   /fifo
-      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
-         fifo(.clk(clk), .reset(/_top|_in>>m4_align(@_in, 0)$reset),
-              .push(/_top|_in>>m4_align(@_in, 0)$trans_valid),
-              .data_in(/_top|_in/_trans>>m4_align(@_in, 0)$ANY),
-              .pop(/_top|_out>>m4_align(@_out, 0)$trans_valid),
-              .data_out(/_top|_out/_trans>>m4_align(@_out, 0)$$ANY),
-              .cnt($$cnt[2:0]));
+         $blocked = (/_top|_in/fifo>>m4_align(@_out, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
+         /fifo
+            simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
+               fifo(.clk(clk), .reset(|_in$reset_in),
+                    .push(|_in$accepted),
+                    .data_in(|_in/_trans$ANY),
+                    .pop(|_in$accepted),
+                    .data_out(/_top|_out/_trans>>m4_align(@_out, @_in)$$ANY),
+                    .cnt($$cnt[\$clog2(#_depth)-1:0]));
    |_out
+      /_trans
       @_out
-         $avail = /_top/fifo>>m4_align(0, @_out)$cnt != 3'b0 || /_top|_in>>m4_align(@_in, @_out)$avail;
+         $avail = /_top|_in/fifo>>m4_align(@_in, @_out)$cnt != '0 || /_top|_in>>m4_align(@_in, @_out)$avail;
          $reset = /_top|_in>>m4_align(@_in, @_out)$reset_in;
 
 
