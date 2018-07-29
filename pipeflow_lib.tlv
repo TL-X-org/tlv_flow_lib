@@ -1277,7 +1277,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                   /trans_out
                      // Loopback requests as responses or use gen_trans.
                      $ANY = /_port|receive2>>m4_align(@_router_out, @_router_in)$valid_request
-                                 ? /_port|receive2/trans>>m4_align(@_router_out, @_router_in)$ANY :
+                                 ? /_port|receive2/_trans>>m4_align(@_router_out, @_router_in)$ANY :
                                    |send/gen_trans$ANY;
                      
                      \SV_plus
@@ -1293,18 +1293,18 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                $avail = /_top/_port|_router_in<>0$avail;
                $reset = /_top/_port|_router_in<>0$reset;
                ?$accepted
-                  /trans
+                  /_trans
                      $response_debug = 1'b1; // Turn this around as a response.
                      $request = $sender != m4_port;  // Arrived as request?
                      $response = $sender == m4_port; // Arrived as response?
                      $ANY = /_top/_port|_router_out/_trans<>0$ANY;
                      $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $request ? $sender : $dest;
-         m4+bp_stage(/_port, |receive1, @_router_out, |receive2, @_router_out, /trans)
+         m4+bp_stage(/_port, |receive1, @_router_out, |receive2, @_router_out, /_trans)
          // A one-cycle backpressured stage to avoid 0-cycle loopback.
          |receive2
             @_router_out
-               $valid_request = $accepted && /trans$request;
-               $valid_response = $accepted && /trans$response;
+               $valid_request = $accepted && /_trans$request;
+               $valid_response = $accepted && /_trans$response;
                // Block requests that cannot loopback a response .
                $blocked = $valid_request && /_top/_port|_router_in>>m4_align(@_router_in, @_router_out)$blocked;
                $accepted = $avail && ! $blocked;
@@ -1325,11 +1325,12 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          @_router_in
             $avail = ! $reset && /_top/tb/_port|send<>0$avail;
             ?$avail
-               /trans
+               /_trans
                   $ANY = /_top/tb/_port|send/trans_out<>0$ANY;
             $reset = /_top/tb/_port|receive2>>m4_align(@_router_out, @_router_in)$reset;
       |_router_out
          @_router_out
             $blocked = /_top/tb/_port|receive1<>0$blocked;
+         /_trans
    m4_popdef(['m4_port'])
    m4_popdef(['M4_PORT'])
