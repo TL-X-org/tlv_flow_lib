@@ -50,11 +50,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // These three signals exist in the same pipestage, which we'll refer to here as |_pipe@_stage.
 //
 // Additionally, flow components propagate reset. By convention, components provide downstream a
-// |_out_pipe@_out_stage$reset. By default this reset is directly connected to |_in_pipe@_in_stage@reset
-// from the first of the inputs. An alternal reset signal can be provided (as a reference from |_in_pipe@_in_stage.
-//  This signal is used internally through a flop.
+// |_out_pipe@_out_stage$reset connected directly to the input reset. The input reset is, by default
+// |_in_pipe@_in_stage@reset from the first of the inputs. An alternate input reset can be provided
+// (as a reference from |_in_pipe@_in_stage).
 //
-// So, more explicitly, the "ready/valid" interface typically supported by this flow library is:
+// So, more explicitly, the "ready/valid" interface typically use by connected flow components in
+// this library is:
 // 
 // From upstream:
 //   |_pipe
@@ -68,7 +69,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //      @_stage
 //         $blocked  // Unable to accept a transaction. (Typically provided in the previous stage, for
 //                   //   consumption in this stage.)
-//         $accepted = $avail && ! $blocked
+//         $accepted = $avail && ! $blocked;
 //
 //
 // Timing Conventions:
@@ -508,7 +509,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //       $full 000010000  (Assuming default m4_high_water.)
 //
 // Fifo bypass goes through a mux with |in_pipe@in_at aligned to |out_pipe@out_at.
-m4_unsupported(['m4_flop_fifo'], 1)
 \TLV flop_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,/_trans,#_high_water, $_reset)
    m4+flow_interface(/_top, [' |_in_pipe, @_in_at'], [' |_out_pipe, @_out_at'], $_reset)
    m4_pushdef(['m4_ptr_width'], \$clog2(#_depth))
@@ -670,6 +670,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
          ?$trans_valid
             $ANY = /read2$ANY;
    */
+m4_unsupported(['m4_flop_fifo'], 1)
 
 
 // A FIFO using simple_bypass_fifo.
@@ -778,7 +779,6 @@ m4_unsupported(['m4_flop_fifo'], 1)
 // output and should not be assigned externally for input.
 //
 
-m4_unsupported(['m4_vc_flop_fifo'], 1)
 \TLV vc_flop_fifo_v2(/_top, |_in_pipe, @_in_at, |_out_pipe, @_out_at, #_depth, /_trans, _vc_range, _prio_range, @_bypass_at_opt, #_high_water, $_reset)
    // TODO: m4+flow_interface(/_top, [' |_in_pipe, @_in_at'], [' |_out_pipe, @_out_at'], $_reset)
    m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at_opt, [''], ['@_out_at'], ['@_bypass_at_opt']))
@@ -864,6 +864,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
    m4_popdef(['m4_bypass_align'])
    m4_popdef(['m4_reverse_bypass_align'])
    m4_popdef(['m4_trans_ind'])
+m4_unsupported(['m4_vc_flop_fifo'], 1)
 
 
 // Flow from /_scope and /_top/no_bypass to /bypass#_cycles that provides a value that bypasses up-to #_cycles
@@ -1236,10 +1237,11 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          $passed = $Cnt > 8 && ! $Error && $BackpressureApplied;
 
 
-
+// A testbench for a router, where the router is a flow component with 0..n ports, that route transactions to
+// destination ports, given by /_port/_trans$dest.
 \TLV router_testbench(/_top, /_port, |_router_in, @_router_in, |_router_out, @_router_out, /_trans, $_reset)
    m4_ifelse(['$_reset'], [''], ['m4_errprint(['$_reset argument required for router_testbench macro'])'])  // Otherwise we can have a cyclic reset loop through flow.
-   /_port
+   /_port[*]
       // Define flow interface. Note that router ins are tb outs and outs are ins.
       m4+flow_interface(/_port, [' |_router_out, @_router_out'], [' |_router_in, @_router_in'], $_reset)
    m4_pushdef(['m4_port'], ['m4_strip_prefix(/_port)'])
@@ -1261,17 +1263,18 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          |send
             @_router_in
                // Generate a transaction to inject sometimes (if needed)
+               $reset = /_port|receive2>>m4_align(@_router_out, @_router_in)$reset;
                $valid_in = /tb|count<>0$CycCount == 3;
                ?$valid_in
                   /gen_trans
                      $cyc_cnt[15:0] = /tb|count<>0$CycCount;
                      $response_debug = 1'b0;  // Not a response (for debug)
-                     $sender[m4_hier_param(M4_PORT, INDEX_RANGE)] = m4_port;
-                     //m4_rand($size, M4_PACKET_SIZE-1, 0, m4_port) // unused
+                     $sender[m4_hier_param(M4_PORT, INDEX_RANGE)] = #m4_port;
+                     //m4_rand($size, M4_PACKET_SIZE-1, 0, #m4_port) // unused
                      m4_rand($dest_tmp, m4_hier_param(M4_PORT, INDEX_MAX), 0, m4_port)
                      $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $dest_tmp % m4_hier_param(M4_PORT, CNT);
-                     //$dest[M4_['']M4_PORT['']_INDEX_RANGE] = m4_port;
-                     //$packet_valid = m4_port == 0 ? 1'b1 : 1'b0; // valid for only first port - unused
+                     //$dest[M4_['']M4_PORT['']_INDEX_RANGE] = #m4_port;
+                     //$packet_valid = #m4_port == 0 ? 1'b1 : 1'b0; // valid for only first port - unused
                $avail = $valid_in || /_port|receive2>>m4_align(@_router_out, @_router_in)$valid_request;
                ?$avail
                   /trans_out
@@ -1282,21 +1285,21 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                      
                      \SV_plus
                         always_ff @(posedge clk) begin
-                           if (/_top/_port|_router_in<>0$accepted) begin
-                              \$display("\|send[%0d]", m4_port);
+                           if (! |send$reset && ! *reset && /_top/_port|_router_in<>0$accepted) begin
+                              \$display("\|send[%0d]", #m4_port);
                               \$display("Sender: %0d, Orig. Cyc: %0d, Dest: %0d, Resp: %0d", $sender, $cyc_cnt, $dest, $response_debug);
                            end
                         end
          // Hook router out to |receive1 and determine transaction response routing (within the transaction).
          |receive1
             @_router_out
-               $avail = /_top/_port|_router_in<>0$avail;
-               $reset = /_top/_port|_router_in<>0$reset;
+               $avail = /_top/_port|_router_out<>0$avail;
+               $reset = /_top/_port|_router_out<>0$reset_in;
                ?$accepted
                   /_trans
                      $response_debug = 1'b1; // Turn this around as a response.
-                     $request = $sender != m4_port;  // Arrived as request?
-                     $response = $sender == m4_port; // Arrived as response?
+                     $request = $sender != #m4_port;  // Arrived as request?
+                     $response = $sender == #m4_port; // Arrived as response?
                      $ANY = /_top/_port|_router_out/_trans<>0$ANY;
                      $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $request ? $sender : $dest;
          m4+bp_stage(/_port, |receive1, @_router_out, |receive2, @_router_out, /_trans)
@@ -1308,17 +1311,17 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                // Block requests that cannot loopback a response .
                $blocked = $valid_request && /_top/_port|_router_in>>m4_align(@_router_in, @_router_out)$blocked;
                $accepted = $avail && ! $blocked;
-               $sent_packet = /_top/_port|_router_in>>m4_align(@_router_in, @_router_out)$accepted;
-               $NumPackets[M4_PACKET_SIZE-1:0] <=
-                    $reset          ? '0 :
-                    $accepted && $sent_packet
-                                    ? $NumPackets :
-                    $valid_request  ? $NumPackets + 1 :
-                    $valid_response ? $NumPackets - 1 :
-                                      $NumPackets;
+               $generated_request =   /_top/_port|_router_in>>m4_align(@_router_in, @_router_out)$accepted &&
+                                    ! /_top/_port|_router_in/trans>>m4_align(@_router_in, @_router_out)$response_debug;
+               $OutstandingPackets[M4_PACKET_SIZE-1:0] <=
+                    $reset ? '0 :
+                      ($OutstandingPackets +
+                       ($generated_request ? M4_PACKET_SIZE'b1 : '0) -
+                       ($valid_response ? M4_PACKET_SIZE'b1 : '0)
+                      );
          |passed  // Aligned to |receive2, but given a new pipeline name to provide a cleaner interface for this $passed output.
             @_router_out
-               $passed = /_port|receive2<>0$reset && /_port|receive2<>0$NumPackets == '0 && /tb|count>>m4_align(@_router_in, @_router_out)$CycCount > 12;
+               $passed = ! /_port|receive2<>0$reset && /_port|receive2<>0$OutstandingPackets == '0 && /tb|count>>m4_align(@_router_in, @_router_out)$CycCount > 12;
    // Connect with DUT.
    /m4_hier_param(M4_PORT, HIER)
       |_router_in
