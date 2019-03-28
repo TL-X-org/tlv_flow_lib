@@ -291,7 +291,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_pushdef(['m4_pre_latch_phase'],  m4_ifelse(m4_a_latch, 1, L,))
    m4_pushdef(['m4_post_latch_phase'], m4_ifelse(m4_b_latch, 1, L,))
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
-   m4_pushdef(['m4_data_delay'], m4_ifelse(#_data_delay, [''], 0, #data_delay))
+   m4_pushdef(['m4_data_delay'], m4_ifelse(#_data_delay, [''], 0, #_data_delay))
    m4+flow_interface(/_top, [' |_in_pipe, @_in_stage'], [' |_out_pipe, @_out_stage'], $_reset)
    |_out_pipe
       @m4_stage_eval(@_out_stage - m4_b_latch <<1)['']m4_post_latch_phase
