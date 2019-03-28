@@ -236,6 +236,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // This provides a backpressure interfaces for one upstream and one downstream component.
 //
+// For flop-based usage:
+//
 // |in_pipe@in_stage$ANY
 //    -----+
 //         |
@@ -266,9 +268,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                        // and must recirculate.
 //         $accepted = $avail && ! $blocked
 //   |_out_pipe
-//      @_out_stage
+//      @_out_stage - 1  // Generally for use in @_out_stage.
 //         $avail         // A transaction is available for consumption.
 //                        // (Actually, @out_stage-1, but expect consumption in @out_stage.)
+//      @_out_stage - 1 + #_data_delay // Generally for use in @_out_stage + #_data_delay.
 //         ?$avail
 //            $ANY        // Output transaction
 //
@@ -282,12 +285,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Internals:
 //   pre_latch_phase:             'L' for A-latch stage.
 //   post_latch_phase:            'L' for B-latch stage.
-\TLV bp_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, /_trans, #_b_latch, #_a_latch, $_reset)
+\TLV bp_stage(/_top, |_in_pipe, @_in_stage, |_out_pipe, @_out_stage, /_trans, #_b_latch, #_a_latch, $_reset, #_data_delay)
    m4_pushdef(['m4_b_latch'],   m4_ifelse(#_b_latch, 1, 1, 0))
    m4_pushdef(['m4_a_latch'],   m4_ifelse(#_a_latch, 1, 1, 0))
    m4_pushdef(['m4_pre_latch_phase'],  m4_ifelse(m4_a_latch, 1, L,))
    m4_pushdef(['m4_post_latch_phase'], m4_ifelse(m4_b_latch, 1, L,))
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
+   m4_pushdef(['m4_data_delay'], m4_ifelse(#_data_delay, [''], 0, #data_delay))
    m4+flow_interface(/_top, [' |_in_pipe, @_in_stage'], [' |_out_pipe, @_out_stage'], $_reset)
    |_out_pipe
       @m4_stage_eval(@_out_stage - m4_b_latch <<1)['']m4_post_latch_phase
@@ -299,7 +303,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                            // For SELF, its in the same stage, and is redundant computation.
                            /_top|_in_pipe>>m4_align(@_in_stage, @_out_stage<<1)$avail; // Incoming available
          //$first_avail = $avail && ! >>1$blocked;  // Transaction is newly available.
-      @m4_stage_eval(@_out_stage<<1)m4_pre_latch_phase
+      @m4_stage_eval(@_out_stage<<1>>m4_data_delay)m4_pre_latch_phase
          ?$avail  // Physically, $first_avail && *reset_b for functional gating in
                   // place of recirculation.
             /_trans
@@ -312,7 +316,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       @m4_stage_eval(@_in_stage - m4_b_latch)['']m4_post_latch_phase
          $blocked = /_top|_out_pipe>>m4_align(@_out_stage, @_in_stage)$recirc;
          // This trans is blocked (whether valid or not) if the next stage is recirculating.
+   m4_popdef(['m4_b_latch'])
+   m4_popdef(['m4_a_latch'])
+   m4_popdef(['m4_pre_latch_phase'])
+   m4_popdef(['m4_post_latch_phase'])
    m4_popdef(['m4_trans_ind'])
+   m4_popdef(['m4_data_delay'])
 
 
 
@@ -344,15 +353,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                        // and will recirculate.
 // Output signals:
 //   |_name#_input_stage
-//      @1
+//      @0  // (for use in @1)
 //         $blocked       // The corresponding input transaction, if valid, cannot be consumed
 //                        // and must recirculate.
 //   |_name#_output_stage
-//      @1
+//      @0  // (for use in @1)
 //         $avail         // A transaction is available for consumption.
-\TLV bp_pipeline(/_top, |_name, #_first_stage, #_last_stage, /_trans, $_reset)
+\TLV bp_pipeline(/_top, |_name, #_first_stage, #_last_stage, /_trans, $_reset, #_data_delay)
    m4_forloop(['m4_stage'], #_first_stage, #_last_stage, ['
-   m4+bp_stage(/_top, |_name['']m4_stage, @1, |_name['']m4_eval(m4_stage + 1), @1, /_trans, 0, 0, $_reset)
+   m4+bp_stage(/_top, |_name['']m4_stage, @1, |_name['']m4_eval(m4_stage + 1), @1, /_trans, 0, 0, $_reset, #_data_delay)
    '])
 
 
