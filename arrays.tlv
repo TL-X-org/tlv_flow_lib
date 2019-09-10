@@ -27,13 +27,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// The array size should be defined by, eg:
+// The array size should be defined outside of pipeline scope by, eg:
 // m4_define_hier(M4_ENTRIES, 1024)
-// Can write transaction (/_trans$ANY) or signal. If writing a signal, include signal range.
+// Can write transaction (/_trans$ANY) or signal. If writing a signal, include signal range in $_wr_data and $_rd_data.
 // Write from |_wr@_wr and read data written last cycle into |_rd@_rd.
 // For naturally-aligned rd/wr pipelines (rd transaction reflects data of stage-aligned wr transaction), @_rd would be @_wr + 1.
 // Functionality is preserved if @_rd and @_wr are changed by the same amount.
-\TLV array1r1w(/_top, /_entries, |_wr, @_wr, $_wr_en, $_wr_addr, |_rd, @_rd, $_rd_en, $_rd_addr, $_data, /_trans)
+// If $_rd_data is [''] it has the same name as $_wr_data.
+\TLV array1r1w(/_top, /_entries, |_wr, @_wr, $_wr, $_wr_addr, $_wr_data, |_rd, @_rd, $_rd, $_rd_addr, $_rd_data, /_trans)
+   m4_define(['m4_rd_data_sig'], m4_ifelse($_rd_data, , $_rw_data, $_rd_data))
    // Write Pipeline
    // The array entries hierarchy (needs a definition to define range, and currently, /_trans declaration required before reference).
    /m4_echo(M4_['']m4_to_upper(m4_strip_prefix(/_entries))_HIER)
@@ -43,13 +45,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    // (TLV assignment syntax prohibits assignment outside of it's own scope, but \SV_plus does not.)
    \SV_plus
       always_comb
-         if (|_wr>>m4_stage_eval(@_wr - 0)$_wr_en)
-            /_entries[|_wr>>m4_stage_eval(@_wr - 0)$_wr_addr]/_trans$['']$_data = |_wr/_trans>>m4_stage_eval(@_wr - 0)$_data;
+         if (|_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr && |_wr>>m4_stage_eval(@_wr - 0)$accepted)
+            /_entries[|_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_addr]/_trans$['']$_wr_data = |_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_data;
    
    // Read Pipeline
    |_rd
       @_rd
          // Read transaction from cache.
-         ?$rd_en
+         $m4_strip_prefix(/_entries)_rd_en = /_trans$rd && $accepted;
+         ?$m4_strip_prefix(/_entries)_rd_en
             /_trans
-            m4_ifelse(/_trans, [''], [''], ['   '])$_data = /_top/_entries[|rd$_rd_addr]/_trans>>m4_stage_eval(1 - @_rd)$_data;
+            m4_ifelse(/_trans, [''], [''], ['   '])['']m4_rd_data_sig = /_top/_entries[|_rd/_trans>>m4_stage_eval(0 - @_rd)$_rd_addr]/_trans>>m4_stage_eval(1 - @_rd)$_wr_data;
