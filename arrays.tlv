@@ -27,6 +27,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// A 1r1w array that reads and writes into (possibly) independent pipelines that
+// follow the flow library convention (at least, they have $accepted signals).
 // The array size should be defined outside of pipeline scope by, eg:
 // m4_define_hier(M4_ENTRIES, 1024)
 // Can write transaction (/_trans$ANY) or signal. If writing a signal, include signal range in $_wr_data and $_rd_data.
@@ -34,6 +36,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // For naturally-aligned rd/wr pipelines (rd transaction reflects data of stage-aligned wr transaction), @_rd would be @_wr + 1.
 // Functionality is preserved if @_rd and @_wr are changed by the same amount.
 // If $_rd_data is [''] it has the same name as $_wr_data.
+// Write enable is: /_trans$_wr && $accepted.
+// Read enable is: /_trans$_rd && $accepted.
 \TLV array1r1w(/_top, /_entries, |_wr, @_wr, $_wr, $_wr_addr, $_wr_data, |_rd, @_rd, $_rd, $_rd_addr, $_rd_data, /_trans)
    m4_define(['m4_rd_data_sig'], m4_ifelse($_rd_data, , $_rw_data, $_rd_data))
    // Write Pipeline
@@ -52,7 +56,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    |_rd
       @_rd
          // Read transaction from cache.
-         $m4_strip_prefix(/_entries)_rd_en = /_trans$rd && $accepted;
+         $m4_strip_prefix(/_entries)_rd_en = /_trans$_rd && $accepted;
          ?$m4_strip_prefix(/_entries)_rd_en
             /_trans
             m4_ifelse(/_trans, [''], [''], ['   '])['']m4_rd_data_sig = /_top/_entries[|_rd/_trans>>m4_stage_eval(0 - @_rd)$_rd_addr]/_trans>>m4_stage_eval(1 - @_rd)$_wr_data;

@@ -196,7 +196,7 @@
    // End of FIFO_DUALCLOCK_MACRO_inst instantiation
    
 // BRAM_SDP_MACRO: Simple Dual Port RAM
-\TLV bram_sdp(data_width, $_wrdata,$_wraddr,$_wren,$_rddata,$_rden,$_rdaddr)
+\TLV bram_sdp(data_width, $_wrdata, $_wraddr, $_wren, $_rddata, $_rden, $_rdaddr)
    m4_pushdef(['m4_we'], m4_ifelse(m4_eval(data_width > 36), 1, 8, m4_eval(data_width > 18), 1, 4, m4_eval(data_width > 9), 1, 2, 1))
 
    ///////////////////////////////////////////////////////////////////////
@@ -230,7 +230,7 @@
          .WRITE_MODE("READ_FIRST")  // Specify "READ_FIRST" for same clock or synchronous clocks
                                      //   Specify "WRITE_FIRST for asynchronous clocks on ports
        )BRAM_SDP_MACRO_inst (
-         .DO($['']$_rddata),    // Output read data port, width defined by READ_WIDTH parameter
+         .DO(>>1$['']$_rddata),    // Output read data port, width defined by READ_WIDTH parameter
          .DI($_wrdata),     // Input write data port, width defined by WRITE_WIDTH parameter
          .RDADDR($_rdaddr), // Input read address, width defined by read port depth
          .RDCLK(*clk),      // 1-bit input read clock
