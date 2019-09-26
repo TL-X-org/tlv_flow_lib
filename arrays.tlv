@@ -59,4 +59,4 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          $m4_strip_prefix(/_entries)_rd_en = /_trans$_rd && $accepted;
          ?$m4_strip_prefix(/_entries)_rd_en
             /_trans
-            m4_ifelse(/_trans, [''], [''], ['   '])['']m4_rd_data_sig = /_top/_entries[|_rd/_trans>>m4_stage_eval(0 - @_rd)$_rd_addr]/_trans>>m4_stage_eval(1 - @_rd)$_wr_data;
+            m4_ifelse(/_trans, [''], [''], ['   '])['']m4_rd_data_sig = /_top/_entries[$_rd_addr]/_trans>>m4_stage_eval(1 - @_rd)$_wr_data;
