@@ -204,7 +204,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_popdef(['m4_trans_ind'])
 
 
-// A 1-in 1-out "avail/blocked" flow component, whose output is simply, the input
+// A 1-in 1-out "avail/blocked" combinational flow component whose output is simply the input
 // with the transaction unconditioned.
 // This is useful for phase-based logic which isn't fully ironed-out yet, and currently
 // requires clock enables to be driven a cycle before they the consuming clock edge.
@@ -213,16 +213,70 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
    m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
    |_in
-      @1
+      @_in
          $blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
    |_out
-      @1
+      @_out
          $avail = /_top|_in>>m4_align(@_in, @_out)$avail;
          $reset = /_top|_in>>m4_align(@_in, @_out)$reset_in;
          /_trans
       m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_out)$ANY;
 
 
+// A 1-in 1-out "avail/blocked" combinational flow component that does nothing.
+// Is can be used to rename a pipeline/pipestage.
+\TLV rename_flow(/_top, |_in, @_in, |_out, @_out, /_trans, $_reset)
+   m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
+   m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
+   |_in
+      @_in
+         $blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
+   |_out
+      @_out
+         $avail = /_top|_in>>m4_align(@_in, @_out)$avail;
+         $reset = /_top|_in>>m4_align(@_in, @_out)$reset_in;
+         ?$avail
+            /_trans
+         m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_out)$ANY;
+
+// A 1-in 1-out "avail/blocked" combinational flow component that is able to drop transactions.
+// |_in@_in$drop must be provided to do so (?$avail). ($drop = 1'b0 is equivalent to rename_flow macro.)
+// If $drop, |_in@_in$blocked == 0 and |_out@_out$avail == 0.
+\TLV drop_flow(/_top, |_in, @_in, |_out, @_out, /_trans, $_reset)
+   m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
+   m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
+   |_in
+      @_in
+         $blocked = /_top|_out>>m4_align(@_out, @_in)$blocked && ! $drop;
+   |_out
+      @_out
+         $avail = /_top|_in>>m4_align(@_in, @_out)$avail &&
+                  ! /_top|_in>>m4_align(@_in, @_out)$dropped;
+         $reset = /_top|_in>>m4_align(@_in, @_out)$reset_in;
+         ?$avail
+            /_trans
+         m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_out)$ANY;
+      
+
+// A 1-in 1-out "avail/blocked" combinational flow component that can be stalled.
+// |_in@_in$stalled must be assigned. ($stalled = 1'b0 acts like rename_flow macro.)
+// While $stalled, |_in@_in$blocked == 1 and |_out@_out@avail == 0.
+// Presumably, the stalling logic will produce |_in@_in$STUFF. THIS MACRO DOES NOT
+// HOLD THIS $STUFF. It must be recirculated externally if $blocked.
+\TLV stall_flow(/_top, |_in, @_in, |_out, @_out, /_trans, $_reset)
+   m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
+   m4_pushdef(['m4_trans_ind'], m4_ifelse(/_trans, [''], [''], ['   ']))
+   |_in
+      @_in
+         $blocked = /_top|_out>>m4_align(@_out, @_in)$blocked || $stalled;
+   |_out
+      @_out
+         $avail = /_top|_in>>m4_align(@_in, @_out)$avail &&
+                  ! /_top|_in>>m4_align(@_in, @_out)$stalled;
+         $reset = /_top|_in>>m4_align(@_in, @_out)$reset_in;
+         ?$avail
+            /_trans
+         m4_trans_ind   $ANY = /_top|_in/_trans>>m4_align(@_in, @_out)$ANY;
 
 
 
