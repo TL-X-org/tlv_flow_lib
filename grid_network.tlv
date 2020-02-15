@@ -29,7 +29,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // ================================================================
 // BE SURE TO CHOOSE AN APPROPRIATE LIBRARY DURING DEVELOPMENT.
-m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/fundamentals_lib.tlv'])
+m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_lib/master/fundamentals_lib.tlv'])
 m4_include_url(['https://raw.githubusercontent.com/stevehoover/tlv_flow_lib/master/pipeflow_lib.tlv'])
 // ================================================================
 
