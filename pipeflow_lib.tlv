@@ -838,13 +838,13 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //            $ANY        // Output transaction (under trans if given)
 
 // Backpressure ($blocked, $full, $ValidCount) signals are per /vc; $trans_valid is a singleton
-// for input and output and must consider per-VC backpressure; $avail is not produced on
+// for input and output and reflects per-VC backpressure; $avail is not produced on
 // output and should not be assigned externally for input.
 //
 
 \TLV vc_flop_fifo_v2(/_top, |_in_pipe, @_in_at, |_out_pipe, @_out_at, #_depth, /_trans, _vc_range, _prio_range, @_bypass_at_opt, #_high_water, $_reset)
    // TODO: m4+flow_interface(/_top, [' |_in_pipe, @_in_at'], [' |_out_pipe, @_out_at'], $_reset)
-   m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at_opt, [''], ['@_out_at'], ['@_bypass_at_opt']))
+   m4_define(['m4_bypass_at'], m4_ifelse(@_bypass_at_opt, [''], @_out_at, @_bypass_at_opt))
    m4_pushdef(['m4_arb_at'], m4_stage_eval(@_out_at - 1))  // Arb and read VC FIFOs the stage before m4_out_at.
    m4_pushdef(['m4_bypass_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_reverse_bypass_align'], m4_align(@_in_at, @_out_at))
@@ -1303,7 +1303,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 // A testbench for a router, where the router is a flow component with 0..n ports, that route transactions to
 // destination ports, given by /_port/_trans$dest.
 \TLV router_testbench(/_top, /_port, |_router_in, @_router_in, |_router_out, @_router_out, /_trans, $_reset)
-   m4_ifelse(['$_reset'], [''], ['m4_errprint(['$_reset argument required for router_testbench macro'])'])  // Otherwise we can have a cyclic reset loop through flow.
+   m4_ifelse($_reset, [''], ['m4_errprint(['$_reset argument required for router_testbench macro'])'])  // Otherwise we can have a cyclic reset loop through flow.
    /_port[*]
       // Define flow interface. Note that router ins are tb outs and outs are ins.
       m4+flow_interface(/_port, [' |_router_out, @_router_out'], [' |_router_in, @_router_in'], $_reset)
