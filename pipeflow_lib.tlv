@@ -1,4 +1,5 @@
-\m4_TLV_version 1d: tlx.org
+\m4_TLV_version 1d: tl-x.org
+\SV
 /*
 Copyright (c) 2014, Intel Corporation
 
@@ -466,7 +467,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          $avail = $reset      ? 1'b0 :
                   >>1$blocked ? >>1$avail :
                                 /_top|_in_pipe>>m4_align(@_in_stage >> 1, @_out_stage)$avail;
-   m4_stage_eval(|_out_pipe<<1)
          ?$avail
             /_trans
          m4_trans_ind   $ANY = |_out_pipe>>1$blocked ? >>1$ANY : /_top|_in_pipe/_trans>>m4_align(@_in_stage >> 1, @_out_stage)$ANY;
@@ -1126,8 +1126,8 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //         @in_stage
 //            $avail         // A transaction is available for consumption.
 //            ?trans_valid = $avail && ! $blocked
-//               $dest       // Destination hop
 //               /_trans
+//                  $dest       // Destination hop
 //                  $ANY        // Input transaction
 //   /hop[*]
 //      |out_pipe
@@ -1160,7 +1160,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   M4 constants must be defined as created by a call to m4_define_hier(..) corresponding to /_hop,
 //   and /_hop must have a low index of 0.
 //
-\TLV simple_ring_v2(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, $_reset, |_name, /_trans)
+\TLV simple_ring_v3(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, $_reset, |_name, /_trans)
    m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
    m4_pushdef(['m4_hop_name'], m4_strip_prefix(/_hop))
@@ -1183,20 +1183,15 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                      ($passed_on || /_hop|_in_pipe<>0$avail);
             $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
             ?$valid
-               $dest =
-                  $passed_on
-                     ? /_hop[prev_hop]|_name>>1$dest
-                     : /_hop|_in_pipe<>0$dest;
-                  /_trans
-                     $ANY =
-                       |_name$passed_on
-                           ? /_hop[prev_hop]|_name/_trans>>1$ANY
-                           : /_hop|_in_pipe/_trans<>0$ANY;
+               /_trans
+                  $ANY =
+                    |_name$passed_on
+                        ? /_hop[prev_hop]|_name/_trans>>1$ANY
+                        : /_hop|_in_pipe/_trans<>0$ANY;
       |_out_pipe
          // Ring out
          @_out_at
-            $avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
-            $blocked = 1'b0;  // Assume no output blocking (bounced transaction).
+            $avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name/_trans>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
             $trans_valid = $avail && ! $blocked;
             $reset = /_hop|_in_pipe>>m4_in_out_align$reset_in;
          ?$trans_valid
@@ -1666,3 +1661,36 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          /_trans
    m4_popdef(['m4_port'])
    m4_popdef(['M4_PORT'])
+
+\SV
+   m4_makerchip_module
+
+
+\TLV
+   $reset = *reset;
+   
+   /stall_stage_test
+      m4+simple_flow_macro_testbench()
+      m4+stall_stage(/stall_stage_test, |pipe1, @1, |pipe3, @1, /trans)
+   /stall_pipeline_test
+      m4+simple_flow_macro_testbench()
+      m4+stall_pipeline(/stall_pipeline_test, |pipe, 1, 3, /trans)
+   /bp_pipeline_test
+      m4+simple_flow_macro_testbench()
+      m4+bp_pipeline(/bp_pipeline_test, |pipe, 1, 3, /trans)
+   /ring_test
+      m4_define_hier(M4_PORT, 4, 0)
+      m4+router_testbench(/ring_test, /port, |in, @1, |out, @1, /trans, /top<>0$reset)
+      m4+simple_ring_v2(/port, |in, @1, |out, @1, /top<>0$reset, |ring, /trans)
+   
+   
+   *passed = *cyc_cnt > 100 &&
+             (/top/stall_stage_test|pipe3>>1$passed &&
+              /top/stall_pipeline_test|pipe3>>1$passed &&
+              /top/bp_pipeline_test|pipe3>>1$passed &&
+              | /top/ring_test/tb/port[*]|passed>>1$passed &&
+              1'b1);
+   *failed = *cyc_cnt > 102;
+   
+\SV
+   endmodule
