@@ -576,9 +576,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    // FIFO Instantiation
    // Hierarchy declarations
    |_in_pipe
-      /entry[(#_depth)-1:0]
+      /entry[m4_eval((#_depth)-1):0]
    |_out_pipe
-      /entry[(#_depth)-1:0]
+      /entry[m4_eval((#_depth)-1):0]
    |_in_pipe
       @_in_at
          $out_blocked = /_top|_out_pipe>>m4_bypass_align$blocked;
@@ -681,7 +681,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
    // Hierarchy
    |m4_in_pipe
-      /entry2[(m4_depth)-1:0]
+      /entry2[m4_eval((m4_depth)-1):0]
 
    // Head/Tail ptrs.
    |m4_in_pipe
