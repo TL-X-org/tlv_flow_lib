@@ -681,7 +681,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
    // Hierarchy
    |m4_in_pipe
-      /entry2[m4_eval((m4_depth)-1):0]
+      /entry2[(m4_depth)-1:0]
 
    // Head/Tail ptrs.
    |m4_in_pipe
