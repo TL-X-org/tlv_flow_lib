@@ -1183,15 +1183,15 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                      ($passed_on || /_hop|_in_pipe<>0$avail);
             $pass_on = $valid && ! /_hop|_out_pipe>>m4_out_in_align$trans_valid;
             ?$valid
-               $dest =
+               $dest[M4_RING_STOP_INDEX_RANGE] =
                   $passed_on
                      ? /_hop[prev_hop]|_name>>1$dest
                      : /_hop|_in_pipe<>0$dest;
-                  /_trans
-                     $ANY =
-                       |_name$passed_on
-                           ? /_hop[prev_hop]|_name/_trans>>1$ANY
-                           : /_hop|_in_pipe/_trans<>0$ANY;
+               /_trans
+                  $ANY =
+                    |_name$passed_on
+                        ? /_hop[prev_hop]|_name/_trans>>1$ANY
+                        : /_hop|_in_pipe/_trans<>0$ANY;
       |_out_pipe
          // Ring out
          @_out_at
