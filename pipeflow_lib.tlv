@@ -137,6 +137,65 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    '])
 
 
+// VIZ Helpers
+// -----------
+// A transaction flow is constructed visually as a graph of line segments with vertices
+// ("steering points") that may be flip-flops, represented by dots. Each transaction is
+// represented by a Fabric.Object (generally a Fabric.Group). This Fabric.Object will generally
+// have originX/Y = "center" and this center moves from point to point along the flow, each
+// cycle from on dot (flip-flop) to the next along the flow (or staying put).
+//
+// Segments in the flow correspond to transaction scopes in the logical design hierarchy.
+// Flow macros connect scopes and own the steering points.
+//
+// Transactions, lines, and dots are created withing VizElements as follows:
+//   - Transactions are held in a JavaScript object within the VizElement of the top-level scope of
+//     the transaction--the scope within which the transaction remains contained, and they are
+//     rendered in this element's overlay.
+//   - Fabric.Line's are created by their corresponding VizElement by the macro whose output
+//     is the segment scope, but in the common ancestor scope of the macro instantiations
+//     providing their input and output (so the segment will be contained within its component's
+//     box).
+//   - Fabric.Circles for flops are created by their macros in and by the scope of the macro
+//     instantiation.
+//
+// Each flow macro is, therefore, responsible for:
+//   - creating dots for its flip-flops and defining its steering points (in its own scope)
+//   - creating segments between its own steering points
+//   - informing its input scopes of their output segment destination points (by assigning its
+//     VizElement's getOutputPoint() to return {point: {left: ..., top: ...}, scope: ...})
+//   - defining the \viz_js block of their output scopes to create segments (in the common
+//     ancestor scope of the macro instantiations providing their input and output (as specified
+//     by a macro parameter))
+//   - animating the movement of transactions that terminate at internal flops from their
+//     upstream flip-flops or points of origin
+
+
+//   _trans_top_scope_js: JS expression for the top-level scope of the transaction. This scope's
+//                        VizJSContext holds the transaction and segment Fabric.Objects.
+//...
+
+// Instantiate a \viz_js block for transaction scope that creates a segment.
+// Args:
+//   _segment_scope_js: JS expression for the VizElement to hold the segment Fabric.Object.
+//   _from_scope_js: JS expression for the transaction ($ANY) scope from which the transaction
+//                   comes.
+\TLV segment_viz(_segment_scope_js, _from_scope_js)
+   \viz_js
+      init() {
+         let segment_scope = _trans_top_scope_js
+         let from_scope = _from_scope_js
+         if (!trans_scope.trans_segments) {
+            trans_scope.trans_segments = []
+         }
+         let makeSegment = () => {
+            
+            new fabric.Line(
+               [],
+               {}
+            )
+         }
+         trans_scope.trans_segments.push()
 
 
 //===============================
@@ -1518,11 +1577,34 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 // For Testing
 //
 
-\TLV simple_flow_macro_testbench()
+\TLV simple_flow_macro_testbench(/_name, _where)
+   \viz_js
+      box: {left: 0, top: 0, width: 100, height: 100, fill: "white"},
+      where: {_where},
+      init() {
+         this.trans = {}  // Transaction Fabric.Objects indexed by $uid.asInt().
+         return {}
+      }
    |pipe1
       @0
          $reset = /top<>0$reset;
       @1
+         \viz_js
+            onTraceData() {
+               let sigs = {$accepted: '$accepted', $uid: '/trans$uid'}
+               let sigSet = this.sigSet(sigs)
+               sigSet.sigs.step(-1)
+               while(sigSet.forwardToValue(sigs.$accepted, 1)) {
+                  let uid = sigs.$uid.asInt(null)
+                  if (uid !== null) {
+                     this.trans[uid] =
+                        new fabric.Group({
+                           box: new fabric.Rect({left: 0, top: 0, width: 100, height: 20, strokeWidth: 0, fill: "blue", originX: "center", originY: "center"}),
+                           text: new fabric.Text(uid.toString(), {left: 0, top: 0, originX: "center", originY: "center"})
+                        }, {visible: false})
+                  }
+               }
+            }
          m4_rand($avail, 0, 0)
          $Cnt[7:0] <= $reset    ? '0 :
                       $accepted ? $Cnt + 8'b1 :
@@ -1533,7 +1615,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                                                         $RETAIN;
          ?$accepted
             /trans
-               $cnt[7:0] = |pipe1$Cnt;
+               $uid[7:0] = |pipe1$Cnt;
                // Flag whether this transaction was backpressured.
                $backpressured = |pipe1$BackpressureCnt > 8'b0;
 
@@ -1549,9 +1631,9 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          $blocked = $blocked_rand < 3'd5;
          ?$accepted
             /trans
-               `BOGUS_USE($cnt)
+               `BOGUS_USE($uid)
          $Error <= $reset    ? '0 :
-                   $accepted ? $Error || (/trans$cnt != $Cnt) :
+                   $accepted ? $Error || (/trans$uid != $Cnt) :
                    $RETAIN;
          // Sticky indication that there was a backpressured transaction.
          $BackpressureApplied <= $reset    ? 1'b0 :
@@ -1563,8 +1645,12 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 
 // A testbench for a router, where the router is a flow component with 0..n ports, that route transactions to
 // destination ports, given by /_port/_trans$dest.
-\TLV router_testbench(/_top, /_port, |_router_in, @_router_in, |_router_out, @_router_out, /_trans, $_reset)
-   m4_ifelse($_reset, [''], ['m4_errprint(['$_reset argument required for router_testbench macro'])'])  // Otherwise we can have a cyclic reset loop through flow.
+\TLV router_testbench(/_top, /_port, |_router_in, @_router_in, |_router_out, @_router_out, /_trans, $_reset, _where)
+   \viz_js
+      box: {left: 0, top: 0, width: 100, height: 100, fill: "white"},
+      where: {_where}
+   // Without $_reset, we can have a cyclic reset loop through flow.
+   m4_ifelse($_reset, [''], ['m4_errprint(['$_reset argument required for router_testbench macro'])'])
    /_port[*]
       // Define flow interface. Note that router ins are tb outs and outs are ins.
       m4+flow_interface(/_port, [' |_router_out, @_router_out'], [' |_router_in, @_router_in'], $_reset)
@@ -1662,6 +1748,27 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
    m4_popdef(['m4_port'])
    m4_popdef(['M4_PORT'])
 
+
+// This must be instantiated to use flow library visualization.
+// TODO: Currently, there is no mechanism to localize this to allow for inclusion of
+//       different versions of this library within the same design.
+\TLV flow_lib_viz()
+   // Provide access to helper functions as getScope("top").context.libs.flow.*.
+   /flow_lib_viz
+      box: {strokeWidth: 0},
+      init() {
+         top = this.getScope("top").context
+         if (! top.libs) {
+            top.libs = {}
+         }
+         if (! top.libs.flow) {
+            top.libs.flow = {}
+         }
+         top.libs.flow.hello = function() {
+            console.log("Hello")
+         }
+      }
+
 \SV
    m4_makerchip_module
 
@@ -1669,19 +1776,36 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 \TLV
    $reset = *reset;
    
+   \viz_js
+      box: {left: 0, top: 0, width: 200, height: 200, fill: "lightgray"}
    /stall_stage_test
-      m4+simple_flow_macro_testbench()
+      m4+simple_flow_macro_testbench(
+        /stall_stage_test,
+        ['left: 5, top: 5, width: 90, height: 90']
+        )
       m4+stall_stage(/stall_stage_test, |pipe1, @1, |pipe3, @1, /trans)
    /stall_pipeline_test
-      m4+simple_flow_macro_testbench()
+      m4+simple_flow_macro_testbench(
+         /stall_pipeline_test,
+         ['left: 105, top: 5, width: 90, height: 90']
+         )
       m4+stall_pipeline(/stall_pipeline_test, |pipe, 1, 3, /trans)
    /bp_pipeline_test
-      m4+simple_flow_macro_testbench()
+      m4+simple_flow_macro_testbench(
+         /bp_pipeline_test,
+         ['left: 5, top: 105, width: 90, height: 90']
+         )
       m4+bp_pipeline(/bp_pipeline_test, |pipe, 1, 3, /trans)
    /ring_test
       m4_define_hier(M4_PORT, 4, 0)
-      m4+router_testbench(/ring_test, /port, |in, @1, |out, @1, /trans, /top<>0$reset)
-      m4+simple_ring_v2(/port, |in, @1, |out, @1, /top<>0$reset, |ring, /trans)
+      m4+router_testbench(
+         /ring_test, /port,
+         |in, @1, |out, @1,
+         /trans,
+         /top<>0$reset,
+         ['left: 105, top: 105, width: 90, height: 90']
+         )
+      m4+simple_ring_v3(/port, |in, @1, |out, @1, /top<>0$reset, |ring, /trans)
    
    
    *passed = *cyc_cnt > 100 &&
