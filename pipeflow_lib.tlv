@@ -694,7 +694,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       // Read data
    |_out_pipe
       @_out_at
-            //$pop  = ! /m4_top|m4_in_pipe>>m4_align(m4_in_at + 1, m4_out_at)$empty && ! $blocked;
+            ///$pop  = ! /m4_top|m4_in_pipe>>m4_align(m4_in_at + 1, m4_out_at)$empty && ! $blocked;
          /entry[*]
             $is_head = /_top|_in_pipe/entry>>m4_align(@_in_at + 1, @_out_at)$is_head;
             $pop  = $is_head && ! |_out_pipe$blocked;
@@ -736,7 +736,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_popdef(['m4_bypass_align'])
    m4_popdef(['m4_reverse_bypass_align'])
    m4_popdef(['m4_trans_ind'])
-   /* Alternate code for pointer indexing.  Replaces $ANY expression above.
+   /** Alternate code for pointer indexing.  Replaces $ANY expression above.
 
    // Hierarchy
    |m4_in_pipe
@@ -782,7 +782,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             `BOGUS_USE($dummy)
          ?$trans_valid
             $ANY = /read2$ANY;
-   */
+   **/
 m4_unsupported(['m4_flop_fifo'], 1)
 
 
