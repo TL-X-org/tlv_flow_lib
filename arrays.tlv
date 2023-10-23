@@ -42,7 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    m4_define(['m4_rd_data_sig'], m4_ifelse($_rd_data, , $_rw_data, $_rd_data))
    // Write Pipeline
    // The array entries hierarchy (needs a definition to define range, and currently, /_trans declaration required before reference).
-   /m4_echo(M4_['']m4_to_upper(m4_strip_prefix(/_entries))_HIER)
+   /m4_echo(m5_['']m4_to_upper(m4_strip_prefix(/_entries))_HIER)
       /_trans
          
    // Write transaction to cache
