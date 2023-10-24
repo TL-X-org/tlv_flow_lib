@@ -39,18 +39,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Write enable is: /_trans$_wr && $accepted.
 // Read enable is: /_trans$_rd && $accepted.
 \TLV array1r1w(/_top, /_entries, |_wr, @_wr, $_wr, $_wr_addr, $_wr_data, |_rd, @_rd, $_rd, $_rd_addr, $_rd_data, /_trans)
-   m4_define(['m4_rd_data_sig'], m4_ifelse($_rd_data, , $_rw_data, $_rd_data))
+   m4_define(['m4_rd_data_sig'], m4_ifelse($_rd_data, , $_wr_data, $_rd_data))
    // Write Pipeline
    // The array entries hierarchy (needs a definition to define range, and currently, /_trans declaration required before reference).
-   /m4_echo(m5_['']m4_to_upper(m4_strip_prefix(/_entries))_HIER)
+   /m5_get(m4_to_upper(m4_strip_prefix(/_entries))_HIER)
       /_trans
          
    // Write transaction to cache
    // (TLV assignment syntax prohibits assignment outside of it's own scope, but \SV_plus does not.)
    \SV_plus
-      always_comb
+      always @ (posedge clk) begin
          if (|_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr && |_wr>>m4_stage_eval(@_wr - 0)$accepted)
-            /_entries[|_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_addr]/_trans$['']$_wr_data = |_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_data;
+            /_entries[|_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_addr]/_trans>>1$['']$_wr_data <= |_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_data;
+      end
    
    // Read Pipeline
    |_rd

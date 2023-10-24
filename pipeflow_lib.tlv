@@ -291,10 +291,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //   o cuts backpressure connection
 //   o add extra backpressure
 // Args (non-standard ones):
-//   $_block_expr:
+//   $_block_expr: An expression in |_in@_in to:
 //      ['']: default behavior (input and output are identical with identical backpressure)
 //      ['&& 1'b0']: cut downstream backpressure because it must be 1'b0. (Use this exact string to enable assertion.)
-//      ['|| ! $ready']: to introduce backpressure
+//      ['|| ! $ready']: to introduce backpressure.
 //      ['&& 1'b0) || (! $ready']: to do both
 \TLV connect(/_top, |_in, @_in, |_out, @_out, /_trans, $_reset, $_block_expr)
    m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
