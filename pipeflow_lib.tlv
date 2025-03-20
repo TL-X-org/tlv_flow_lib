@@ -835,7 +835,7 @@ m4_unsupported(['m4_flop_fifo'], 1)
                     .data_in(|_in/_trans$ANY),
                     .pop(/_top|_out>>m4_align(@_out, @_in)$accepted),
                     .data_out(/_top|_out/_trans>>m4_align(@_out, @_in)$$ANY),
-                    .cnt($$cnt[\$clog2(#_depth)-1:0]));
+                    .cnt($$cnt[\$clog2(#_depth + 1)-1:0]));
    |_out
       /_trans
       @_out
