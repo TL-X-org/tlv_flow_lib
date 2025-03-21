@@ -791,43 +791,21 @@ m4_unsupported(['m4_flop_fifo'], 1)
 //
 // The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
 //
-\TLV m4_old_simple_bypass_fifo_v2(/_top,|_in_pipe,@_in_at,|_out_pipe,@_out_at,#_depth,#_width,/_trans,#_high_water)
-   |_in_pipe
-      @_in_at
-         $out_blocked = /_top|_out_pipe>>m4_align(@_out_at, @_in_at)$blocked;
-         $blocked = (/_top/fifo>>m4_align(0, @_in_at)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, ['#_high_water']))) && $out_blocked;
-   /fifo
-      simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
-         fifo(.clk(clk), .reset(/_top|m4_in_pipe>>m4_align(@_in_at, 0)$reset),
-              .push(/_top|_in_pipe>>m4_align(@_in_at, 0)$trans_valid),
-              .data_in(/_top|_in_pipe['']/_trans>>m4_align(@_in_at, 0)$ANY),
-              .pop(/_top|_out_pipe>>m4_align(@_out_at, 0)$trans_valid),
-              .data_out(/_top|_out_pipe['']/_trans>>m4_align(@_out_at, 0)$$ANY),
-              .cnt($$cnt[2:0]));
-   |_out_pipe
-      @_out_at
-         $avail = /_top/fifo>>m4_align(0, @_out_at)$cnt != 3'b0 || /_top|_in_pipe>>m4_align(@_in_at, @m4_out_at)$avail;
-         $trans_valid = $avail && !$blocked;
-
-
-
-
-// A FIFO using simple_bypass_fifo.
-// Requires include "simple_bypass_fifo.sv".
-//
-// The interface is identical to m4_flop_fifo, above, except that data width must be provided explicitly.
-//
 // Args:
 //   /_top, |_in, @_in, |_out, @_out, #_depth, #_width: as one would expect.
 //   /_trans: hierarchy for transaction, eg: ['/flit'] or ['']
 //   #_high_water: Default to 0.  Number of additional entries beyond full.
-\TLV simple_bypass_fifo_v2(/_top, |_in, @_in, |_out, @_out, #_depth, #_width, /_trans, #_high_water, $_reset)
+//   $_reset: As is standard for flow components.
+//   _direct_backpressure: Default to 0. 1 to unblock input on the same cycle as unblocked output.
+\TLV simple_bypass_fifo_v2(/_top, |_in, @_in, |_out, @_out, #_depth, #_width, /_trans, #_high_water, $_reset, _direct_backpressure)
    m4+flow_interface(/_top, [' |_in, @_in'], [' |_out, @_out'], $_reset)
    |_in
       /_trans
       @_in
-         $out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;
-         $blocked = (/_top|_in/fifo>>m4_align(@_out, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water))) && $out_blocked;
+         m4_ifelse(_direct_backpressure, 1, ['$out_blocked = /_top|_out>>m4_align(@_out, @_in)$blocked;'])
+         $blocked = (/_top|_in/fifo>>m4_align(@_out, @_in)$cnt >= m4_eval(#_depth - m4_ifelse(#_high_water, [''], 0, #_high_water)))m4_ifelse(_direct_backpressure, 1, [' && $out_blocked']);
+         // Block the input based on last cycle's awareness of fullness, so there's no same-cycle path from $out_blocked to $blocked.
+         // So, $block if $cnt (reflecting push/pop last cycle) is at or above the high water mark and .
          /fifo
             simple_bypass_fifo #(.WIDTH(#_width), .DEPTH(#_depth))
                fifo(.clk(clk), .reset(|_in$reset_in),
