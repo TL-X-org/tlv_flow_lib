@@ -1191,9 +1191,10 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   /hop[*]
 //      |out_pipe
 //         @out_stage
-//            $blocked       // The corresponding output transaction, if valid, cannot be consumed, though
-//                           //   backpressure is not supported at the output, so $blocked is assumed to be 1'b0,
-//                           //   and this is not really an input.
+//            //$blocked       // The corresponding output transaction, if valid, cannot be consumed, though
+//                             //   backpressure is not supported at the output, so $blocked is assumed to be 1'b0,
+//                             //   and this is not really an input. If connecting to another flow component,
+//                             //   `BOGUS_USE($blocked) should be used with an assertion that $blocked is 1'b0.
 // Output interface:
 //   /hop[*]
 //      |in_pipe
@@ -1219,7 +1220,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
 //   M4 constants must be defined as created by a call to m4_define_hier(..) corresponding to /_hop,
 //   and /_hop must have a low index of 0.
 //
-\TLV simple_ring_v3(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, $_reset, |_name, /_trans)
+\TLV simple_ring_v4(/_hop, |_in_pipe, @_in_at, |_out_pipe, @_out_at, $_reset, |_name, /_trans)
    m4_pushdef(['m4_out_in_align'], m4_align(@_out_at, @_in_at))
    m4_pushdef(['m4_in_out_align'], m4_align(@_in_at, @_out_at))
    m4_pushdef(['m4_hop_name'], m4_strip_prefix(/_hop))
@@ -1251,7 +1252,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          // Ring out
          @_out_at
             $avail = /_hop|_name>>m4_in_out_align$valid && (/_hop|_name/_trans>>m4_in_out_align$dest == #m4_strip_prefix(/_hop));
-            $trans_valid = $avail && ! $blocked;
+            $trans_valid = $avail;  // No backpressure support: && ! $blocked;
             $reset = /_hop|_in_pipe>>m4_in_out_align$reset_in;
          ?$trans_valid
             @_out_at
