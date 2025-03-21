@@ -1712,7 +1712,8 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                      $request = $sender != #m4_port;  // Arrived as request?
                      $response = $sender == #m4_port; // Arrived as response?
                      $ANY = /_top/_port|_router_out/_trans<>0$ANY;
-                     $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $request ? $sender : $dest;
+                     // Reassign $dest to $sender to transition request to respons (or keep it as is for incoming responses).
+                     $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $request ? $sender : /_top/_port|_router_out/_trans<>0$dest;
          m4+bp_stage(/_port, |receive1, @_router_out, |receive2, @_router_out, /_trans)
          // A one-cycle backpressured stage to avoid 0-cycle loopback.
          |receive2
