@@ -1690,16 +1690,16 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
                      $request = $sender != #m4_port;  // Arrived as request?
                      $response = $sender == #m4_port; // Arrived as response?
                      $ANY = /_top/_port|_router_out/_trans<>0$ANY;
-                     // Reassign $dest to $sender to transition request to respons (or keep it as is for incoming responses).
-                     $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $request ? $sender : /_top/_port|_router_out/_trans<>0$dest;
+                     // Reassign $dest to $sender to transition request to response (and if this isn't a request, we're done with $dest).
+                     $dest[m4_hier_param(M4_PORT, INDEX_RANGE)] = $sender;
          m4+bp_stage(/_port, |receive1, @_router_out, |receive2, @_router_out, /_trans)
          // A one-cycle backpressured stage to avoid 0-cycle loopback.
          |receive2
             @_router_out
                $valid_request = $accepted && /_trans$request;
                $valid_response = $accepted && /_trans$response;
-               // Block requests that cannot loopback a response .
-               $blocked = $valid_request && /_top/_port|_router_in>>m4_align(@_router_in, @_router_out)$blocked;
+               // Block requests that cannot loopback a response.
+               $blocked = /_trans$request && /_top/_port|_router_in>>m4_align(@_router_in, @_router_out)$blocked;
                $accepted = $avail && ! $blocked;
                $generated_request =   /_top/_port|_router_in>>m4_align(@_router_in, @_router_out)$accepted &&
                                     ! /_top/_port|_router_in/trans>>m4_align(@_router_in, @_router_out)$response_debug;
