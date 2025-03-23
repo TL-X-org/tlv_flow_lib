@@ -1785,7 +1785,7 @@ m4_unsupported(['m4_vc_flop_fifo'], 1)
          /top<>0$reset,
          ['left: 105, top: 105, width: 90, height: 90']
          )
-      m4+simple_ring_v3(/port, |in, @1, |out, @1, /top<>0$reset, |ring, /trans)
+      m4+simple_ring_v4(/port, |in, @1, |out, @1, /top<>0$reset, |ring, /trans)
    
    
    *passed = *cyc_cnt > 100 &&
