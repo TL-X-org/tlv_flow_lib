@@ -6,7 +6,7 @@
 \TLV mult($_p,$_a,$_b,$_rst,#_pipeline,$_ce,#_awidth,#_bwidth)
    \SV_plus
       MULT_MACRO #(
-         .DEVICE("ULTASCALE"), // Target Device: "ULTRASCALE" 
+         .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
          .LATENCY(m4_defaulted_arg(['#_pipeline'], ['0'])),        // Desired clock cycle latency, 0-4
          .WIDTH_A(m4_defaulted_arg(['#_awidth'], ['30'])),       // Multiplier A-input bus width, 1-30
          .WIDTH_B(m4_defaulted_arg(['#_bwidth'], ['18'])),       // Multiplier B-input bus width, 1-18
@@ -45,7 +45,7 @@
    \SV_plus
       COUNTER_LOAD_MACRO #(
          .COUNT_BY(48'h000000000001), // Count by value
-         .DEVICE("ULTRASCALE"), // Target Device: "ULTRSCALE" 
+         .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
          .WIDTH_DATA(m4_defaulted_arg(['#_width_data'], ['48']))     // Counter output bus width, 1-48
       ) COUNTER_LOAD_MACRO_inst (
          .Q($['']$_q),                 // Counter output, width determined by WIDTH_DATA parameter 
@@ -140,8 +140,8 @@
 \TLV ram128b($_d,$_we,$_a,$_dpra,$_dp0,$_sp0,#_wclk_inverted)
    \SV_plus
       RAM128X1D #(
-      .INIT(128’h0),
-      .IS_WCLK_INVERTED(1’b['']m4_defaulted_arg(['#_wclk_inverted'], ['0'])) // Specifies active high/low WCLK
+      .INIT(128'h0),
+      .IS_WCLK_INVERTED(1'b['']m4_defaulted_arg(['#_wclk_inverted'], ['0'])) // Specifies active high/low WCLK
       ) RAM128X1D_inst (
       .DPO($['']$_dp0), // Read port 1-bit output
       .SPO($['']$_sp0), // Read/write port 1-bit output
@@ -220,7 +220,7 @@
    \SV_plus
       BRAM_SDP_MACRO #(
          .BRAM_SIZE("36Kb"), // Target BRAM, "18Kb" or "36Kb" 
-         .DEVICE("ULTRASCLE"), // Target device: "ULTRASACLE" 
+         .DEVICE("ULTRASCALE"), // Target device: "ULTRASCALE" 
          .WRITE_WIDTH(data_width),    // Valid values are 1-72 (37-72 only valid when BRAM_SIZE="36Kb")
          .READ_WIDTH(data_width),     // Valid values are 1-72 (37-72 only valid when BRAM_SIZE="36Kb")
          .DO_REG(0),         // Optional output register (0 or 1)
@@ -271,7 +271,7 @@
    \SV_plus
       BRAM_SINGLE_MACRO #(
          .BRAM_SIZE("36Kb"), // Target BRAM, "18Kb" or "36Kb" 
-         .DEVICE("ULTRASCLE"), // Target Device: "ULTRASCALE" 
+         .DEVICE("ULTRASCALE"), // Target Device: "ULTRASCALE" 
          .DO_REG(0), // Optional output register (0 or 1)
          .INIT(36'h000000000), // Initial values on output port
          .INIT_FILE ("NONE"),

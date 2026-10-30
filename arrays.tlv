@@ -1,4 +1,6 @@
-\m4_TLV_version 1d: tl-x.org
+\m5_TLV_version 1d: tl-x.org
+\m5
+   use(m5-1.0)
 \SV
 /*
 Copyright (c) 2018, Steven F. Hoover
@@ -29,8 +31,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // A 1r1w array that reads and writes into (possibly) independent pipelines that
 // follow the flow library convention (at least, they have $accepted signals).
-// The array size should be defined outside of pipeline scope by, eg:
-// m4_define_hier(M4_ENTRIES, 1024)
+// The array size should be defined outside of pipeline scope using M5 by, eg (in an \m5 region):
+//   define_hier(ENTRIES, 1024)
 // Can write transaction (/_trans$ANY) or signal. If writing a signal, include signal range in $_wr_data and $_rd_data.
 // Write from |_wr@_wr and read data written last cycle into |_rd@_rd.
 // For naturally-aligned rd/wr pipelines (rd transaction reflects data of stage-aligned wr transaction), @_rd would be @_wr + 1.
@@ -39,25 +41,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Write enable is: /_trans$_wr && $accepted.
 // Read enable is: /_trans$_rd && $accepted.
 \TLV array1r1w(/_top, /_entries, |_wr, @_wr, $_wr, $_wr_addr, $_wr_data, |_rd, @_rd, $_rd, $_rd_addr, $_rd_data, /_trans)
-   m4_define(['m4_rd_data_sig'], m4_ifelse($_rd_data, , $_wr_data, $_rd_data))
+   m5_push_var(rd_data_sig, m5_if_eq($_rd_data, [''], $_wr_data, $_rd_data))
    // Write Pipeline
    // The array entries hierarchy (needs a definition to define range, and currently, /_trans declaration required before reference).
-   /m5_get(m4_to_upper(m4_strip_prefix(/_entries))_HIER)
+   /m5_get(m5_uppercase(m5_strip_prefix(/_entries))_HIER)
       /_trans
          
    // Write transaction to cache
    // (TLV assignment syntax prohibits assignment outside of it's own scope, but \SV_plus does not.)
    \SV_plus
       always @ (posedge clk) begin
-         if (|_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr && |_wr>>m4_stage_eval(@_wr - 0)$accepted)
-            /_entries[|_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_addr]/_trans>>1$['']$_wr_data <= |_wr/_trans>>m4_stage_eval(@_wr - 0)$_wr_data;
+         if (|_wr/_trans>>m5_stage_calc(@_wr - 0)$_wr && |_wr>>m5_stage_calc(@_wr - 0)$accepted)
+            /_entries[|_wr/_trans>>m5_stage_calc(@_wr - 0)$_wr_addr]/_trans>>1$['']$_wr_data <= |_wr/_trans>>m5_stage_calc(@_wr - 0)$_wr_data;
       end
    
    // Read Pipeline
    |_rd
       @_rd
          // Read transaction from cache.
-         $m4_strip_prefix(/_entries)_rd_en = /_trans$_rd && $accepted;
-         ?$m4_strip_prefix(/_entries)_rd_en
+         $m5_strip_prefix(/_entries)_rd_en = /_trans$_rd && $accepted;
+         ?$m5_strip_prefix(/_entries)_rd_en
             /_trans
-            m4_ifelse(/_trans, [''], [''], ['   '])['']m4_rd_data_sig = /_top/_entries[$_rd_addr]/_trans>>m4_stage_eval(1 - @_rd)$_wr_data;
+            m5_if_eq(/_trans, [''], [''], ['   '])['']m5_rd_data_sig = /_top/_entries[$_rd_addr]/_trans>>m5_stage_calc(1 - @_rd)$_wr_data;
+   m5_pop(rd_data_sig)
+
+\SV
+   /// This library was converted from M4 to M5. M4 treats "//" as a comment (protecting comment text from macro
+   /// processing), while M5 does not, and this setting persists beyond the inclusion of a library file. Restore the
+   /// M4 setting so that includers see the same behavior as they did when including the M4 version of this library.
+   m4_changecom(['//'])
