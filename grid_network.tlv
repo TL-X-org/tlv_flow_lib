@@ -230,8 +230,8 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
          
          /M4_VC_HIER
             
-            //+// Credit, reflecting 
-            //+m4_credit_counter(['            $1'], ']m4___file__[', ']m4___line__[', ['m4_['']credit_counter(...)'], $Credit, 1, 2, $reset, $push, >vc|m4_out_pipe%m4_bypass_align$trans_valid)
+            ///+// Credit, reflecting 
+            ///+['xxx m4_credit_counter(['            $1'], ']m4___file__[', ']m4___line__[', ['m4_['']credit_counter(...)'], $Credit, 1, 2, $reset, $push, >vc|m4_out_pipe%m4_bypass_align$trans_valid)  xxx']
 
          /vc[*]
             |netwk_eject
@@ -244,7 +244,7 @@ m4_define_hier(M4_FLIT_CNT, 16, 0)
                ?$trans_valid
                   /flit
                      $ANY = /* temp loopback */ /xx|netwk_inject/flit<>0$ANY;
-         //m4+vc_flop_fifo_v2(xx, netwk_eject, 1, tb_out, 1, 6, >flit, M4_VC_MAX:M4_VC_MIN, M4_PRIO_MAX:M4_PRIO_MIN, 1, 1)
+         ///m4+vc_flop_fifo_v2(xx, netwk_eject, 1, tb_out, 1, 6, >flit, M4_VC_MAX:M4_VC_MIN, M4_PRIO_MAX:M4_PRIO_MIN, 1, 1)
          m4+vc_flop_fifo_v2(/xx, |netwk_eject, @1, |tb_out, @1, 6, /flit, M4_VC_RANGE, M4_PRIO_RANGE, @1, 1)
          /vc[*]
             |tb_out
